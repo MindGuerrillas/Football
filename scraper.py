@@ -4,7 +4,7 @@ from lxml import html
 import requests
 import json
 
-# BBC Sport Football results scraper
+# BBC Sport Football results scraper v0.1
 
 baseurl = "https://www.bbc.co.uk/sport/football/premier-league/scores-fixtures/" # dateslug "/2019-04"
 
