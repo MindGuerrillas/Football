@@ -3,6 +3,8 @@
 from lxml import html
 import requests
 import json
+import pymongo
+from pymongo import MongoClient
 
 # BBC Sport Football results scraper v0.1
 
@@ -13,6 +15,8 @@ def printJSON(data, indentvalue=2):
 
     print (json.dumps(parsed_data, indent=indentvalue, sort_keys=True))
 
+# getMonthlyFixtures() returns a list of dictionary objects. 
+# Each dictionary contains details of one fixture
 def getMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
     
     if dateslugyear == None or dateslugmonth == None:
@@ -49,8 +53,6 @@ def getMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
             matchDate = fixtures[x].text_content() + " " + str(dateslugyear)
             x = x + 1
         else: # It's a fixture
-            #print (matchDate + ' ' + fixtures[x] + ' ' + fixtures[x+1] + ' ' + fixtures[x+2] + ' ' + fixtures[x+3])
-            
             # Store match in data[]
             matchdetails = {}
             matchdetails["date"] = matchDate
@@ -67,7 +69,7 @@ def getMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
     return data
 
 # Get fixtures for 2018/19 Season - from 2018-08 to 2019-04 - i.e 9 months
-numberofmonths = 9
+numberofmonths = 1
 currentmonth = 8
 currentyear = 2018
 
@@ -76,7 +78,9 @@ results = []
 
 for m in range(numberofmonths):
 
-    results.append(getMonthlyFixtures(currentyear, currentmonth))
+    fixtures = getMonthlyFixtures(currentyear, currentmonth)
+    for fixture in fixtures:
+        results.append(fixture)
 
     #printJSON(json.dumps(results))
 
@@ -86,4 +90,23 @@ for m in range(numberofmonths):
     else:
         currentmonth += 1
 
-printJSON(json.dumps(results))
+#printJSON(json.dumps(results))
+print (results)
+
+# Store data in MongoDB
+
+# connect to mongo
+client = MongoClient(username="root", password="example")
+# specify database
+db = client.football_database
+# specify collection
+collection = db.results_collection
+
+resultIDs = collection.insert_many(results)
+
+# count documents in result_collection
+print str(collection.count_documents({})) + " matches saved to database"
+
+
+
+
