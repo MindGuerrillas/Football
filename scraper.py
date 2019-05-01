@@ -3,17 +3,15 @@
 from lxml import html
 import requests
 import json
-import pymongo
 from pymongo import MongoClient
+from dateutil.parser import parse
 
 # BBC Sport Football results scraper v0.1
 
 baseurl = "https://www.bbc.co.uk/sport/football/premier-league/scores-fixtures/" # dateslug "/2019-04"
 
 def printJSON(data, indentvalue=2):
-    parsed_data = json.loads(data)
-
-    print (json.dumps(parsed_data, indent=indentvalue, sort_keys=True))
+    print (json.dumps(json.loads(data), indent=indentvalue, sort_keys=True))
 
 # getMonthlyFixtures() returns a list of dictionary objects. 
 # Each dictionary contains details of one fixture
@@ -42,34 +40,33 @@ def getMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
     #}
 
     data = []
-
-    x = 0
+    index = 0
     matchDate = ""
     matchcounter = 0
 
-    while x <= len(fixtures) - 1:
+    while index <= len(fixtures) - 1:
 
-        if isinstance(fixtures[x], html.HtmlElement): #It's a date
-            matchDate = fixtures[x].text_content() + " " + str(dateslugyear)
-            x = x + 1
+        if isinstance(fixtures[index], html.HtmlElement): #It's a date
+            matchDate = fixtures[index].text_content() + " " + str(dateslugyear)
+            index += 1
         else: # It's a fixture
             # Store match in data[]
             matchdetails = {}
-            matchdetails["date"] = matchDate
-            matchdetails["hometeam"] = fixtures[x]
-            matchdetails["homescore"] = fixtures[x+1]
-            matchdetails["awayteam"] = fixtures[x+2]
-            matchdetails["awayscore"] = fixtures[x+3]
+            matchdetails["date"] = parse(matchDate)
+            matchdetails["hometeam"] = fixtures[index]
+            matchdetails["homescore"] = int(fixtures[index+1])
+            matchdetails["awayteam"] = fixtures[index+2]
+            matchdetails["awayscore"] = int(fixtures[index+3])
 
             data.append(matchdetails)
 
             matchcounter += 1
-            x += 4
+            index += 4
     
     return data
 
 # Get fixtures for 2018/19 Season - from 2018-08 to 2019-04 - i.e 9 months
-numberofmonths = 1
+numberofmonths = 9
 currentmonth = 8
 currentyear = 2018
 
@@ -78,11 +75,7 @@ results = []
 
 for m in range(numberofmonths):
 
-    fixtures = getMonthlyFixtures(currentyear, currentmonth)
-    for fixture in fixtures:
-        results.append(fixture)
-
-    #printJSON(json.dumps(results))
+    results.extend(getMonthlyFixtures(currentyear, currentmonth))
 
     if currentmonth >= 12:
         currentmonth = 1
@@ -90,23 +83,19 @@ for m in range(numberofmonths):
     else:
         currentmonth += 1
 
-#printJSON(json.dumps(results))
-print (results)
-
 # Store data in MongoDB
-
 # connect to mongo
 client = MongoClient(username="root", password="example")
 # specify database
 db = client.football_database
 # specify collection
 collection = db.results_collection
-
+# save results to database
 resultIDs = collection.insert_many(results)
 
 # count documents in result_collection
-print str(collection.count_documents({})) + " matches saved to database"
+print "Results saved"
 
-
+client.close()
 
 
