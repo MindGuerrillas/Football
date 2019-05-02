@@ -7,7 +7,7 @@ services:
       context: ./web
       dockerfile: Dockerfile
 
-    restart: on-failure
+    restart: always
     ports:
       - "4000:80"
     volumes:
