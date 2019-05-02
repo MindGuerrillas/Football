@@ -1,8 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 
 from lxml import html
 import requests
 import json
+import pymongo
 from pymongo import MongoClient
 from dateutil.parser import parse
 
@@ -90,11 +91,17 @@ client = MongoClient(username="root", password="example")
 db = client.football_database
 # specify collection
 collection = db.results_collection
-# save results to database
-resultIDs = collection.insert_many(results)
 
-# count documents in result_collection
-print "Results saved"
+# save results to database
+try:
+    resultIDs = collection.insert_many(results)
+except (pymongo.errors.BulkWriteError, pymongo.errors.ServerSelectionTimeoutError, 
+        pymongo.errors.OperationFailure) as e:
+    print (e)
+except:
+    print ("Unhandled Error")
+else:
+    print ("Results saved")
 
 client.close()
 
