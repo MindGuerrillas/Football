@@ -8,14 +8,16 @@ from pymongo import MongoClient
 from dateutil.parser import parse
 import hashlib
 
-# BBC Sport Football results scraper v0.1
+# BBC Sport Football results scraper v0.2
 
-baseurl = "https://www.bbc.co.uk/sport/football/premier-league/scores-fixtures/" # dateslug "/2019-04"
+# dateslug "/2019-04"
+baseurl = "https://www.bbc.co.uk/sport/football/premier-league/scores-fixtures/"
 
 mongoClient = None
 
+
 def getDatabase():
-    
+
     global mongoClient
 
     if mongoClient == None:
@@ -31,10 +33,10 @@ def printJSON(data, indentvalue=2):
     print (json.dumps(json.loads(data), indent=indentvalue, sort_keys=True))
 
 
-# getMonthlyFixtures() returns a list of dictionary objects. 
+# getMonthlyFixtures() returns a list of dictionary objects.
 # Each dictionary contains details of one fixture
 def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None, seasontag=""):
-    
+
     if dateslugyear == None or dateslugmonth == None:
         return None
 
@@ -49,15 +51,15 @@ def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None, seasontag=""):
 
     fixtures = tree.xpath(xpathFixtures + ' | ' + xpathDates)
 
-    #{
-    #   ".id": SHA1 hash of hometeam+awayteam+season    
+    # {
+    #   ".id": SHA1 hash of hometeam+awayteam+season
     #   "date": "Saturday 11th August 2018",
     #   "hometeam": "Liverpool",
     #   "awayteam": "West Ham United",
     #   "homescore": "4",
     #   "awayscore": "0"
     #   "season": 2018
-    #}
+    # }
 
     data = []
     index = 0
@@ -66,10 +68,11 @@ def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None, seasontag=""):
 
     while index <= len(fixtures) - 1:
 
-        if isinstance(fixtures[index], html.HtmlElement): #It's a date
-            matchDate = fixtures[index].text_content() + " " + str(dateslugyear)
+        if isinstance(fixtures[index], html.HtmlElement):  # It's a date
+            matchDate = fixtures[index].text_content() + \
+                " " + str(dateslugyear)
             index += 1
-        else: # It's a fixture
+        else:  # It's a fixture
             # Store match in data[]
             matchdetails = {}
 
@@ -87,19 +90,22 @@ def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None, seasontag=""):
 
             matchcounter += 1
             index += 4
-    
+
     return data
 
 # Get fixtures for 2018/19 Season - from 2018-08 to 2019-04 - i.e 9 months
-def getFixtures(currentyear=2018,currentmonth=8,numberofmonths=9):
-    
+
+
+def getFixtures(currentyear=2018, currentmonth=8, numberofmonths=9):
+
     # Sore results in list of match dictionaries
     results = []
     seasontag = currentyear
 
-    for m in range(numberofmonths):
+    for _ in range(numberofmonths):
 
-        results.extend(scrapeMonthlyFixtures(currentyear, currentmonth, seasontag))
+        results.extend(scrapeMonthlyFixtures(
+            currentyear, currentmonth, seasontag))
 
         if currentmonth >= 12:
             currentmonth = 1
@@ -114,8 +120,8 @@ def getFixtures(currentyear=2018,currentmonth=8,numberofmonths=9):
 
     # save results to database
     try:
-        resultIDs = collection.insert_many(results)
-    except (pymongo.errors.BulkWriteError, pymongo.errors.ServerSelectionTimeoutError, 
+        collection.insert_many(results)
+    except (pymongo.errors.BulkWriteError, pymongo.errors.ServerSelectionTimeoutError,
             pymongo.errors.OperationFailure) as e:
         print (e)
     except:
@@ -125,4 +131,21 @@ def getFixtures(currentyear=2018,currentmonth=8,numberofmonths=9):
 
     closeDatabase()
 
-getFixtures()
+
+def displayFixtures(season=2018, club=None):
+    db = getDatabase()
+
+    query = {}
+    query["season"] = season
+
+    if club:
+        query["$or"] = [{"hometeam": club}, {"awayteam": club}]
+
+    fixtures = db.results_collection.find(query).sort([("date", 1), ("hometeam", 1)])
+
+    for fixture in fixtures:
+        print fixture["hometeam"] + " " + str(fixture["homescore"]) + \
+            "-" + str(fixture["awayscore"]) + " " + fixture["awayteam"]
+
+
+displayFixtures(2018, "Liverpool")
