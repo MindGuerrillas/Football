@@ -16,7 +16,7 @@ def printJSON(data, indentvalue=2):
 
 # getMonthlyFixtures() returns a list of dictionary objects. 
 # Each dictionary contains details of one fixture
-def getMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
+def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
     
     if dateslugyear == None or dateslugmonth == None:
         return None
@@ -67,42 +67,40 @@ def getMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
     return data
 
 # Get fixtures for 2018/19 Season - from 2018-08 to 2019-04 - i.e 9 months
-numberofmonths = 9
-currentmonth = 8
-currentyear = 2018
+def getFixtures(currentyear,currentmonth=8,numberofmonths=9):
+    
+    # Sore results in list of match dictionaries
+    results = []
 
-# Sore results in list of match dictionaries
-results = []
+    for m in range(numberofmonths):
 
-for m in range(numberofmonths):
+        results.extend(scrapeMonthlyFixtures(currentyear, currentmonth))
 
-    results.extend(getMonthlyFixtures(currentyear, currentmonth))
+        if currentmonth >= 12:
+            currentmonth = 1
+            currentyear += 1
+        else:
+            currentmonth += 1
 
-    if currentmonth >= 12:
-        currentmonth = 1
-        currentyear += 1
+    # Store data in MongoDB
+    # connect to mongo
+    client = MongoClient(username="root", password="example")
+    # specify database
+    db = client.football_database
+    # specify collection
+    collection = db.results_collection
+
+    # save results to database
+    try:
+        resultIDs = collection.insert_many(results)
+    except (pymongo.errors.BulkWriteError, pymongo.errors.ServerSelectionTimeoutError, 
+            pymongo.errors.OperationFailure) as e:
+        print (e)
+    except:
+        print ("Unhandled Error")
     else:
-        currentmonth += 1
+        print ("Results saved")
 
-# Store data in MongoDB
-# connect to mongo
-client = MongoClient(username="root", password="example")
-# specify database
-db = client.football_database
-# specify collection
-collection = db.results_collection
-
-# save results to database
-try:
-    resultIDs = collection.insert_many(results)
-except (pymongo.errors.BulkWriteError, pymongo.errors.ServerSelectionTimeoutError, 
-        pymongo.errors.OperationFailure) as e:
-    print (e)
-except:
-    print ("Unhandled Error")
-else:
-    print ("Results saved")
-
-client.close()
+    client.close()
 
 

@@ -5,13 +5,12 @@ services:
   web:
     build:
       context: ./web
-      dockerfile: Dockerfile
 
     restart: always
     ports:
-      - "4000:80"
+      - 4000:80
     volumes:
-      - ./src:/app
+      - ./web/src:/app
       
   mongo:
     image: mongo
