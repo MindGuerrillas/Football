@@ -6,17 +6,34 @@ import json
 import pymongo
 from pymongo import MongoClient
 from dateutil.parser import parse
+import hashlib
 
 # BBC Sport Football results scraper v0.1
 
 baseurl = "https://www.bbc.co.uk/sport/football/premier-league/scores-fixtures/" # dateslug "/2019-04"
 
+mongoClient = None
+
+def getDatabase():
+    
+    global mongoClient
+
+    if mongoClient == None:
+        mongoClient = MongoClient(username="root", password="example")
+    return mongoClient.football_database
+
+
+def closeDatabase():
+    mongoClient.close()
+
+
 def printJSON(data, indentvalue=2):
     print (json.dumps(json.loads(data), indent=indentvalue, sort_keys=True))
 
+
 # getMonthlyFixtures() returns a list of dictionary objects. 
 # Each dictionary contains details of one fixture
-def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
+def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None, seasontag=""):
     
     if dateslugyear == None or dateslugmonth == None:
         return None
@@ -33,11 +50,13 @@ def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
     fixtures = tree.xpath(xpathFixtures + ' | ' + xpathDates)
 
     #{
+    #   ".id": SHA1 hash of hometeam+awayteam+season    
     #   "date": "Saturday 11th August 2018",
     #   "hometeam": "Liverpool",
     #   "awayteam": "West Ham United",
     #   "homescore": "4",
     #   "awayscore": "0"
+    #   "season": 2018
     #}
 
     data = []
@@ -53,11 +72,16 @@ def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
         else: # It's a fixture
             # Store match in data[]
             matchdetails = {}
+
+            idhash = fixtures[index] + fixtures[index+2] + str(seasontag)
+
+            matchdetails["_id"] = hashlib.sha1(idhash.encode()).hexdigest()
             matchdetails["date"] = parse(matchDate)
             matchdetails["hometeam"] = fixtures[index]
             matchdetails["homescore"] = int(fixtures[index+1])
             matchdetails["awayteam"] = fixtures[index+2]
             matchdetails["awayscore"] = int(fixtures[index+3])
+            matchdetails["season"] = int(seasontag)
 
             data.append(matchdetails)
 
@@ -67,14 +91,15 @@ def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
     return data
 
 # Get fixtures for 2018/19 Season - from 2018-08 to 2019-04 - i.e 9 months
-def getFixtures(currentyear,currentmonth=8,numberofmonths=9):
+def getFixtures(currentyear=2018,currentmonth=8,numberofmonths=9):
     
     # Sore results in list of match dictionaries
     results = []
+    seasontag = currentyear
 
     for m in range(numberofmonths):
 
-        results.extend(scrapeMonthlyFixtures(currentyear, currentmonth))
+        results.extend(scrapeMonthlyFixtures(currentyear, currentmonth, seasontag))
 
         if currentmonth >= 12:
             currentmonth = 1
@@ -83,10 +108,7 @@ def getFixtures(currentyear,currentmonth=8,numberofmonths=9):
             currentmonth += 1
 
     # Store data in MongoDB
-    # connect to mongo
-    client = MongoClient(username="root", password="example")
-    # specify database
-    db = client.football_database
+    db = getDatabase()
     # specify collection
     collection = db.results_collection
 
@@ -101,6 +123,6 @@ def getFixtures(currentyear,currentmonth=8,numberofmonths=9):
     else:
         print ("Results saved")
 
-    client.close()
+    closeDatabase()
 
-
+getFixtures()
