@@ -2,13 +2,12 @@
 
 from lxml import html
 import requests
-import json
 import pymongo
 from pymongo import MongoClient
 from dateutil.parser import parse
 import hashlib
 
-# BBC Sport Football results scraper v0.2
+# BBC Sport Football results scraper v0.3
 
 # dateslug "/2019-04"
 baseurl = "https://www.bbc.co.uk/sport/football/premier-league/scores-fixtures/"
@@ -29,11 +28,7 @@ def closeDatabase():
     mongoClient.close()
 
 
-def printJSON(data, indentvalue=2):
-    print(json.dumps(json.loads(data), indent=indentvalue, sort_keys=True))
-
-
-# getMonthlyFixtures() returns a list of dictionary objects.
+# scrapeMonthlyFixtures() returns a list of dictionary objects.
 # Each dictionary contains details of one fixture
 def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
 
@@ -61,7 +56,6 @@ def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
     data = []
     index = 0
     matchDate = ""
-    matchcounter = 0
 
     while index <= len(fixtures) - 1:
 
@@ -83,6 +77,7 @@ def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
             #       "team": "Liverpool",
             #       "score": 4,
             #       "players": [{"player_name": "Sadio Mane"}]
+            #   },
             #   "away": {
             #       "team": "West Ham",
             #       "score": 0,
@@ -110,7 +105,6 @@ def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
             # Store match in data[]
             data.append(matchdetails)
 
-            matchcounter += 1
             index += 4
 
     return data
@@ -118,7 +112,7 @@ def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
 # Get fixtures for 2018/19 Season - from 2018-08 to 2019-04 - i.e 9 months
 
 
-def getFixtures(currentyear=2018, currentmonth=8, numberofmonths=9):
+def scrapeFixtures(currentyear=2018, currentmonth=8, numberofmonths=9):
 
     # Sore results in list of match dictionaries
     results = []
@@ -170,9 +164,3 @@ def displayFixtures(season=2018, club=None):
               "-" + str(away["score"]) + " " + away["team"])
 
     closeDatabase()
-
-
-displayFixtures(2018, "Liverpool")
-
-# getFixtures(2018,8,1)
-# getFixtures(2018)
