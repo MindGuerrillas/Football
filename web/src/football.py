@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 from lxml import html
 import requests
@@ -22,7 +22,7 @@ def getDatabase():
 
     if mongoClient == None:
         mongoClient = MongoClient(username="root", password="example")
-    return mongoClient.football_database
+    return mongoClient.football
 
 
 def closeDatabase():
@@ -30,17 +30,24 @@ def closeDatabase():
 
 
 def printJSON(data, indentvalue=2):
-    print (json.dumps(json.loads(data), indent=indentvalue, sort_keys=True))
+    print(json.dumps(json.loads(data), indent=indentvalue, sort_keys=True))
 
 
 # getMonthlyFixtures() returns a list of dictionary objects.
 # Each dictionary contains details of one fixture
-def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None, seasontag=""):
+def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
 
     if dateslugyear == None or dateslugmonth == None:
         return None
 
     dateslug = str(dateslugyear) + "-" + "{:02d}".format(dateslugmonth)
+
+    # Which season is it?
+    # Season runs from month=8 to month=6 following the year
+    if dateslugmonth >= 8:
+        seasontag = dateslugyear
+    else:
+        seasontag = dateslugyear - 1
 
     url = baseurl + dateslug
     page = requests.get(url)
@@ -50,16 +57,6 @@ def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None, seasontag=""):
     xpathDates = '//h3[@class="gel-minion sp-c-match-list-heading"]'
 
     fixtures = tree.xpath(xpathFixtures + ' | ' + xpathDates)
-
-    # {
-    #   ".id": SHA1 hash of hometeam+awayteam+season
-    #   "date": "Saturday 11th August 2018",
-    #   "hometeam": "Liverpool",
-    #   "awayteam": "West Ham United",
-    #   "homescore": "4",
-    #   "awayscore": "0"
-    #   "season": 2018
-    # }
 
     data = []
     index = 0
@@ -73,19 +70,44 @@ def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None, seasontag=""):
                 " " + str(dateslugyear)
             index += 1
         else:  # It's a fixture
-            # Store match in data[]
+
             matchdetails = {}
+
+            # {
+            #   ".id": SHA1 hash of hometeam+awayteam+season
+            #   "date": "Saturday 11th August 2018",
+            #   "season": 2018,
+            #   "attendance": 52000,
+            #
+            #   "home": {
+            #       "team": "Liverpool",
+            #       "score": 4,
+            #       "players": [{"player_name": "Sadio Mane"}]
+            #   "away": {
+            #       "team": "West Ham",
+            #       "score": 0,
+            #       "players": [{"player_name": "Mark Noble"}]
+            #   }
+            # }
 
             idhash = fixtures[index] + fixtures[index+2] + str(seasontag)
 
             matchdetails["_id"] = hashlib.sha1(idhash.encode()).hexdigest()
             matchdetails["date"] = parse(matchDate)
-            matchdetails["hometeam"] = fixtures[index]
-            matchdetails["homescore"] = int(fixtures[index+1])
-            matchdetails["awayteam"] = fixtures[index+2]
-            matchdetails["awayscore"] = int(fixtures[index+3])
             matchdetails["season"] = int(seasontag)
+            matchdetails["attendance"] = None
+            matchdetails["home"] = {
+                "team": fixtures[index],
+                "score": int(fixtures[index+1]),
+                "players": [{}]
+            }
+            matchdetails["away"] = {
+                "team": fixtures[index+2],
+                "score": int(fixtures[index+3]),
+                "players": [{}]
+            }
 
+            # Store match in data[]
             data.append(matchdetails)
 
             matchcounter += 1
@@ -100,12 +122,10 @@ def getFixtures(currentyear=2018, currentmonth=8, numberofmonths=9):
 
     # Sore results in list of match dictionaries
     results = []
-    seasontag = currentyear
 
     for _ in range(numberofmonths):
 
-        results.extend(scrapeMonthlyFixtures(
-            currentyear, currentmonth, seasontag))
+        results.extend(scrapeMonthlyFixtures(currentyear, currentmonth))
 
         if currentmonth >= 12:
             currentmonth = 1
@@ -116,18 +136,18 @@ def getFixtures(currentyear=2018, currentmonth=8, numberofmonths=9):
     # Store data in MongoDB
     db = getDatabase()
     # specify collection
-    collection = db.results_collection
+    collection = db.results
 
     # save results to database
     try:
-        collection.insert_many(results)
+        collection.insert_many(results, ordered=False)
     except (pymongo.errors.BulkWriteError, pymongo.errors.ServerSelectionTimeoutError,
             pymongo.errors.OperationFailure) as e:
-        print (e)
+        print(e)
     except:
-        print ("Unhandled Error")
+        print("Unhandled Error")
     else:
-        print ("Results saved")
+        print("Results saved")
 
     closeDatabase()
 
@@ -139,13 +159,20 @@ def displayFixtures(season=2018, club=None):
     query["season"] = season
 
     if club:
-        query["$or"] = [{"hometeam": club}, {"awayteam": club}]
+        query["$or"] = [{"home.team": club}, {"away.team": club}]
 
-    fixtures = db.results_collection.find(query).sort([("date", 1), ("hometeam", 1)])
+    fixtures = db.results.find(query).sort([("date", 1), ("home.team", 1)])
 
     for fixture in fixtures:
-        print fixture["hometeam"] + " " + str(fixture["homescore"]) + \
-            "-" + str(fixture["awayscore"]) + " " + fixture["awayteam"]
+        home = fixture["home"]
+        away = fixture["away"]
+        print(home["team"] + " " + str(home["score"]) +
+              "-" + str(away["score"]) + " " + away["team"])
+
+    closeDatabase()
 
 
 displayFixtures(2018, "Liverpool")
+
+# getFixtures(2018,8,1)
+# getFixtures(2018)
