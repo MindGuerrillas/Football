@@ -2,3 +2,4 @@ Flask
 requests
 lxml
 pymongo
+python-dateutil

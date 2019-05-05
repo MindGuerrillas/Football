@@ -1,0 +1,15 @@
+<!doctype html>
+<html>
+<head>
+    <title>Results</title>
+</head>
+
+<body>
+
+{% for fixture in data %}
+   {{ fixture.home.team }} {{ fixture.home.score }}-{{ fixture.away.score }} {{ fixture.away.team }}
+   <BR>
+{% endfor %}
+
+</body>
+</html>
