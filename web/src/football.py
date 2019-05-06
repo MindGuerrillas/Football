@@ -21,7 +21,7 @@ def getDatabase():
     global mongoClient
 
     if mongoClient == None:
-        mongoClient = MongoClient("localhost", username="root", password="example")
+        mongoClient = MongoClient("mongo", username="root", password="example")
     return mongoClient.football
 
 
@@ -48,6 +48,9 @@ def whichSeason(month, year, fulldate=None):
         season = year - 1
 
     return season
+
+def currentSeason():
+    return whichSeason(0,0,datetime.datetime.now())
 
 
 # scrapeMonthlyFixtures() returns a list of dictionary objects.
@@ -162,8 +165,9 @@ def scrapeFixtures(currentyear=2018, currentmonth=8, numberofmonths=10):
 
 
 def getFixtures(season=2018, club=None, print_to_stdout=False):
+    
     db = getDatabase()
-
+ 
     query = {}
     query["season"] = season
 
@@ -233,7 +237,7 @@ def buildTable(season=2018, lastdate=None):
     # _id: hash of table date
     # date: date table goes up to i.e. date of last fixture
     # season: season id tag e.g. 2018
-    # table {  - a dictionary containing 1 dictionary per team
+    # standings {  - a dictionary containing 1 dictionary per team
     #   "Liverpool":
     #   {
     #       "home": {
@@ -443,13 +447,15 @@ def getTable(season=2018, scope=None, lastdate=datetime.datetime.now()):
     table = sorted(table,key=lambda x: x[1][scope]["gd"], reverse=True)
     table = sorted(table,key=lambda x: x[1][scope]["points"], reverse=True)
 
-    #for x in table:
-    #    print (x[0] + " " + str(x[1]["totals"]["gd"]) + " " + str(x[1]["totals"]["points"]) + \
-    #            " " + str(x[1]["totals"]["form"]))
-    
     return table
 
+def printTable(table):
+    for x in table:
+        print (x[0] + " " + str(x[1]["totals"]["gd"]) + " " + str(x[1]["totals"]["points"]) + \
+                " " + str(x[1]["totals"]["form"]))
+
 #scrapeFixtures(2018)
-getTable(2018)
+#printTable(getTable(2018))
+#getFixtures(2018,5,"Liverpool")
 
 closeDatabase()

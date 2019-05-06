@@ -1,0 +1,15 @@
+<!doctype html>
+<html>
+<head>
+    <title>Table</title>
+</head>
+
+<body>
+
+{% for row in data %}
+   {{ row[0] }} {{ row[1][scope]["gd"]}}  {{ row[1][scope]["points"]}}  {{ row[1][scope]["form"]}}  
+   <BR>
+{% endfor %}
+
+</body>
+</html>
