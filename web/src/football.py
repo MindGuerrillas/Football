@@ -52,10 +52,16 @@ def whichSeason(month, year, fulldate=None):
 def currentSeason():
     return whichSeason(0,0,datetime.datetime.now())
 
+def teamnameSlug(team):
+    # return lower case team name
+    # replace spaces with - dash
 
-# scrapeMonthlyFixtures() returns a list of dictionary objects.
+    return team.lower().replace(" ", "-")
+
+
+# __scrapeMonthlyFixtures() returns a list of dictionary objects.
 # Each dictionary contains details of one fixture
-def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
+def __scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
 
     if dateslugyear == None or dateslugmonth == None:
         return None
@@ -95,11 +101,13 @@ def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
             #
             #   "home": {
             #       "team": "Liverpool",
+            #       "teamslug": "liverpool",
             #       "score": 4,
             #       "players": [{"player_name": "Sadio Mane"}]
             #   },
             #   "away": {
             #       "team": "West Ham",
+            #       "teamslug": "west-ham-united",
             #       "score": 0,
             #       "players": [{"player_name": "Mark Noble"}]
             #   }
@@ -113,11 +121,13 @@ def scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
             matchdetails["attendance"] = None
             matchdetails["home"] = {
                 "team": fixtures[index],
+                "teamslug": teamnameSlug(fixtures[index]),
                 "score": int(fixtures[index+1]),
                 "players": [{}]
             }
             matchdetails["away"] = {
                 "team": fixtures[index+2],
+                "teamslug": teamnameSlug(fixtures[index+2]),
                 "score": int(fixtures[index+3]),
                 "players": [{}]
             }
@@ -137,7 +147,7 @@ def scrapeFixtures(currentyear=2018, currentmonth=8, numberofmonths=10):
 
     for _ in range(numberofmonths):
 
-        results.extend(scrapeMonthlyFixtures(currentyear, currentmonth))
+        results.extend(__scrapeMonthlyFixtures(currentyear, currentmonth))
 
         #print ("Getting: " + str(currentmonth) + " " + str(currentyear))
 
@@ -163,6 +173,8 @@ def scrapeFixtures(currentyear=2018, currentmonth=8, numberofmonths=10):
     else:
         print("Results saved")
 
+    closeDatabase()
+
 
 def getFixtures(season=2018, club=None, print_to_stdout=False):
     
@@ -172,7 +184,8 @@ def getFixtures(season=2018, club=None, print_to_stdout=False):
     query["season"] = season
 
     if club:
-        query["$or"] = [{"home.team": club}, {"away.team": club}]
+        club = teamnameSlug(club)
+        query["$or"] = [{"home.teamslug": club}, {"away.teamslug": club}]
 
     fixtures = db.results.find(query).sort([("date", 1), ("home.team", 1)])
 
@@ -183,6 +196,8 @@ def getFixtures(season=2018, club=None, print_to_stdout=False):
             print(home["team"] + " " + str(home["score"]) +
                 "-" + str(away["score"]) + " " + away["team"])
 
+    closeDatabase()
+
     return list(fixtures)
 
 
@@ -190,16 +205,18 @@ def getTeamForm(team, scope=None, lastdate=None, games=5):
 
     query = {}
 
+    team = teamnameSlug(team)
+
     if lastdate != None:
         parsed_date = parse(str(lastdate))
         query["date"] = {"$lte":parsed_date}
 
     if scope == "home":
-        query["home.team"] = team
+        query["home.teamslug"] = team
     elif scope == "away":
-        query["away.team"] = team
+        query["away.teamslug"] = team
     else:
-        query["$or"] = [{"home.team": team}, {"away.team": team}]
+        query["$or"] = [{"home.teamslug": team}, {"away.teamslug": team}]
 
     db = getDatabase()
     
@@ -210,7 +227,7 @@ def getTeamForm(team, scope=None, lastdate=None, games=5):
     for fixture in fixtures:
 
         # Is it a home game?
-        if fixture["home"]["team"] == team:
+        if fixture["home"]["teamslug"] == team:
             if fixture["home"]["score"] > fixture["away"]["score"]:
                 form.append("W")
             elif fixture["home"]["score"] < fixture["away"]["score"]:
@@ -229,7 +246,7 @@ def getTeamForm(team, scope=None, lastdate=None, games=5):
 
     return form
 
-def buildTable(season=2018, lastdate=None):
+def __buildTable(season=2018, lastdate=None):
 
     # Analyse results for season & generate a league table
     # Table format
@@ -238,8 +255,9 @@ def buildTable(season=2018, lastdate=None):
     # date: date table goes up to i.e. date of last fixture
     # season: season id tag e.g. 2018
     # standings {  - a dictionary containing 1 dictionary per team
-    #   "Liverpool":
+    #   "liverpool":     # This is the teamnameSlug e.g. west-ham-united
     #   {
+    #       "teamname": Liverpool,
     #       "home": {
     #               "played": 0
     #               "won": 0,
@@ -252,7 +270,7 @@ def buildTable(season=2018, lastdate=None):
     #               "form": []
     #             },
     #       "away": {
-    #               "played": 0        
+    #               "played": 0
     #               "won": 0,
     #               "drawn": 0,
     #               "lost": 0
@@ -293,7 +311,7 @@ def buildTable(season=2018, lastdate=None):
     table["season"] = season
     table["standings"] = {}
 
-    t = {}
+    standings = {}
     lastFixtureDate = None
     fixture_count = 0
 
@@ -310,8 +328,9 @@ def buildTable(season=2018, lastdate=None):
 
         # is team already in table? If not add it and set starting values
         for team in [home, away]:
-            if team["team"] not in t:
-                t[team["team"]] = {
+            if team["teamslug"] not in standings:
+                standings[team["teamslug"]] = {
+                                    "teamname": team["team"],
                                     "home": {"played": 0,"won": 0,"drawn": 0,"lost": 0,"for": 0,"against": 0,"gd": 0,"points": 0},
                                     "away": {"played": 0,"won": 0,"drawn": 0,"lost": 0,"for": 0,"against": 0,"gd": 0,"points": 0},
                                     "totals": {"played": 0,"won": 0,"drawn": 0,"lost": 0,"for": 0,"against": 0,"gd": 0,"points": 0}
@@ -319,40 +338,40 @@ def buildTable(season=2018, lastdate=None):
 
         # Add goals to table
         # home team
-        t[home["team"]]["home"]["for"] += home["score"]
-        t[home["team"]]["home"]["against"] += away["score"]
-        t[home["team"]]["home"]["gd"] += (home["score"] - away["score"])
+        standings[home["teamslug"]]["home"]["for"] += home["score"]
+        standings[home["teamslug"]]["home"]["against"] += away["score"]
+        standings[home["teamslug"]]["home"]["gd"] += (home["score"] - away["score"])
         # away team
-        t[away["team"]]["away"]["for"] += away["score"]
-        t[away["team"]]["away"]["against"] += home["score"]
-        t[away["team"]]["away"]["gd"] += (away["score"] - home["score"])       
+        standings[away["teamslug"]]["away"]["for"] += away["score"]
+        standings[away["teamslug"]]["away"]["against"] += home["score"]
+        standings[away["teamslug"]]["away"]["gd"] += (away["score"] - home["score"])       
 
         # Who won?
         if home["score"] > away["score"]: # Home Win
-            t[home["team"]]["home"]["won"] += 1
-            t[home["team"]]["home"]["points"] += 3
-            t[away["team"]]["away"]["lost"] += 1
+            standings[home["teamslug"]]["home"]["won"] += 1
+            standings[home["teamslug"]]["home"]["points"] += 3
+            standings[away["teamslug"]]["away"]["lost"] += 1
 
         elif away["score"] > home["score"]: # Away Win
-            t[away["team"]]["away"]["won"] += 1
-            t[away["team"]]["away"]["points"] += 3
-            t[home["team"]]["home"]["lost"] += 1
+            standings[away["teamslug"]]["away"]["won"] += 1
+            standings[away["teamslug"]]["away"]["points"] += 3
+            standings[home["teamslug"]]["home"]["lost"] += 1
         else: # draw
-            t[home["team"]]["home"]["drawn"] += 1
-            t[home["team"]]["home"]["points"] += 1
-            t[away["team"]]["away"]["drawn"] += 1
-            t[away["team"]]["away"]["points"] += 1
+            standings[home["teamslug"]]["home"]["drawn"] += 1
+            standings[home["teamslug"]]["home"]["points"] += 1
+            standings[away["teamslug"]]["away"]["drawn"] += 1
+            standings[away["teamslug"]]["away"]["points"] += 1
         
         # Add the game
-        t[home["team"]]["home"]["played"] += 1
-        t[away["team"]]["away"]["played"] += 1
+        standings[home["teamslug"]]["home"]["played"] += 1
+        standings[away["teamslug"]]["away"]["played"] += 1
 
         fixture_count += 1
 
     if fixture_count == 0: # No fixtures processed so no table either
         return None
 
-    table["standings"] = t
+    table["standings"] = standings
     table["date"] = parse(str(lastFixtureDate))
     table["_id"] = hashlib.sha1(str(table["date"]).encode()).hexdigest()
 
@@ -387,6 +406,8 @@ def buildTable(season=2018, lastdate=None):
     else:
         print("Table saved")
 
+    closeDatabase()
+
     return table
 
 # scope must be home or away
@@ -412,7 +433,7 @@ def getTable(season=2018, scope=None, lastdate=datetime.datetime.now()):
         data = db.tables.find(query).sort("date", -1).limit(1).next() 
     except StopIteration:
         print ("No tables found - Generate one")
-        data = buildTable(season, parse(lastdate))
+        data = __buildTable(season, parse(lastdate))
         if data == None:
             print ("No tables could be generated")
             return None
@@ -432,7 +453,7 @@ def getTable(season=2018, scope=None, lastdate=datetime.datetime.now()):
         games = db.results.find(query).sort("date", -1).limit(1)
 
         # Generate a new table            
-        data = buildTable(season, parse(str(games[0]["date"])))
+        data = __buildTable(season, parse(str(games[0]["date"])))
 
         if data == None:
             print ("No tables could be generated")
@@ -447,15 +468,20 @@ def getTable(season=2018, scope=None, lastdate=datetime.datetime.now()):
     table = sorted(table,key=lambda x: x[1][scope]["gd"], reverse=True)
     table = sorted(table,key=lambda x: x[1][scope]["points"], reverse=True)
 
+    closeDatabase()
+
     return table
 
 def printTable(table):
     for x in table:
-        print (x[0] + " " + str(x[1]["totals"]["gd"]) + " " + str(x[1]["totals"]["points"]) + \
+        print (x[1]["teamname"] + " " + str(x[1]["totals"]["gd"]) + " " + str(x[1]["totals"]["points"]) + \
                 " " + str(x[1]["totals"]["form"]))
+
+
+
+
 
 #scrapeFixtures(2018)
 #printTable(getTable(2018))
-#getFixtures(2018,5,"Liverpool")
+getFixtures(2018,"Liverpool",True)
 
-closeDatabase()

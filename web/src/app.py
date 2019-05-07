@@ -3,13 +3,18 @@
 from flask import Flask, redirect, url_for
 from flask import render_template
 import football
+import html
 
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    html = "Hello World"
-    return html
+    
+    output =    html.escape("/results/<int:season>/<team>") + "<BR>" + \
+                html.escape("/table/<int:season>/<scope>")
+
+    
+    return output
 
 
 @app.route("/results/")
