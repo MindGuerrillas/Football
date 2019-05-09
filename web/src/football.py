@@ -7,21 +7,23 @@ from pymongo import MongoClient
 from dateutil.parser import parse
 import hashlib
 import datetime
+import constant as const
+import unicodedata
 
 # BBC Sport Football results scraper v0.3
 
-# dateslug "/2019-04"
-baseurl = "https://www.bbc.co.uk/sport/football/premier-league/scores-fixtures/"
-
 mongoClient = None
-
 
 def getDatabase():
 
     global mongoClient
 
     if mongoClient == None:
-        mongoClient = MongoClient("mongo", username="root", password="example")
+        mongoClient = MongoClient(
+            const.MONGODB_SERVER,
+            username=const.MONGODB_USER,
+            password=const.MONGODB_PASSWORD
+        )
     return mongoClient.football
 
 
@@ -42,7 +44,7 @@ def whichSeason(month, year, fulldate=None):
         month = fulldate.month
         year = fulldate.year
 
-    if month >= 8:
+    if month >= const.SEASON_START_MONTH:
         season = year
     else:
         season = year - 1
@@ -52,16 +54,29 @@ def whichSeason(month, year, fulldate=None):
 def currentSeason():
     return whichSeason(0,0,datetime.datetime.now())
 
+def strip_accents(text):
+
+    try:
+        text = unicode(text, 'utf-8')
+    except NameError: # unicode is a default on python 3 
+        pass
+
+    text = unicodedata.normalize('NFD', text)\
+           .encode('ascii', 'ignore')\
+           .decode("utf-8")
+
+    return str(text)
+
 def __teamnameSlug(team):
     # return lower case team name
     # replace spaces with - dash
 
-    return team.lower().replace(" ", "-")
+    return strip_accents(team).lower().replace(" ", "-")
 
 
 # __scrapeMonthlyFixtures() returns a list of dictionary objects.
 # Each dictionary contains details of one fixture
-def __scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
+def __scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None, league=const.PREMIER_LEAGUE):
 
     if dateslugyear == None or dateslugmonth == None:
         return None
@@ -70,8 +85,12 @@ def __scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
 
     seasontag = whichSeason(dateslugmonth, dateslugyear)
 
-    url = baseurl + dateslug + "?filter=results"
+    url = const.BASE_URL.replace("LEAGUETAG", league) + dateslug + "?filter=results"
+
+    print ("Scraping " + url)
+    
     page = requests.get(url)
+
     tree = html.fromstring(page.content)
 
     xpathFixtures = '//article[@class="sp-c-fixture"]/descendant::span/text()'
@@ -94,9 +113,11 @@ def __scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
             matchdetails = {}
 
             # {
-            #   ".id": SHA1 hash of hometeam+awayteam+season
+            #   ".id": SHA1 hash of hometeam+awayteam+season+date
             #   "date": "Saturday 11th August 2018",
             #   "season": 2018,
+            #   "league": premier-league,
+            #   "tag": "",
             #   "attendance": 52000,
             #
             #   "home": {
@@ -113,12 +134,15 @@ def __scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
             #   }
             # }
 
-            idhash = fixtures[index] + fixtures[index+2] + str(seasontag)
+            idhash = fixtures[index] + fixtures[index+2] + str(seasontag) + str(parse(matchDate))
 
             matchdetails["_id"] = hashlib.sha1(idhash.encode()).hexdigest()
             matchdetails["date"] = parse(matchDate)
             matchdetails["season"] = int(seasontag)
             matchdetails["attendance"] = None
+            matchdetails["league"] = league
+            matchdetails["tag"] = ""
+
             matchdetails["home"] = {
                 "team": fixtures[index],
                 "teamslug": __teamnameSlug(fixtures[index]),
@@ -140,14 +164,16 @@ def __scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None):
     return data
 
 # Get fixtures for named season - August to May - i.e 10 months
-def scrapeFixtures(currentyear=currentSeason(), currentmonth=8, numberofmonths=10):
+def scrapeFixtures(currentyear=currentSeason(), league=const.PREMIER_LEAGUE, 
+                    currentmonth=const.SEASON_START_MONTH, numberofmonths=const.SEASON_LENGTH
+                ):
 
-    # Sore results in list of match dictionaries
+    # Store results in list of match dictionaries
     results = []
 
     for _ in range(numberofmonths):
 
-        results.extend(__scrapeMonthlyFixtures(currentyear, currentmonth))
+        results.extend(__scrapeMonthlyFixtures(currentyear, currentmonth, league))
 
         #print ("Getting: " + str(currentmonth) + " " + str(currentyear))
 
@@ -162,12 +188,15 @@ def scrapeFixtures(currentyear=currentSeason(), currentmonth=8, numberofmonths=1
     # specify collection
     collection = db.results
 
+    print ("Saving " + str(len(results)) + " results" )
+
     # save results to database
     try:
         collection.insert_many(results, ordered=False)
     except (pymongo.errors.BulkWriteError, pymongo.errors.ServerSelectionTimeoutError,
             pymongo.errors.OperationFailure) as e:
-        print(e)
+        print (e)
+        #print(e.details["writeErrors"])
     except:
         print("Unhandled Error")
     else:
@@ -176,16 +205,19 @@ def scrapeFixtures(currentyear=currentSeason(), currentmonth=8, numberofmonths=1
     closeDatabase()
 
 
-def getFixtures(season=currentSeason(), club=None, month=None):
+def getFixtures(league=const.PREMIER_LEAGUE, season=currentSeason(), club=None, month=None):
     
     # Sanity check
     if season == None:
         season = currentSeason()
+    if league == None:
+        league = const.PREMIER_LEAGUE
 
     db = getDatabase()
  
     query = {}
     query["season"] = season
+    query["league"] = league
 
     if month:
         query["$expr"] = { "$eq": [{ "$month": "$date" }, month] }
@@ -246,14 +278,16 @@ def getTeamForm(team, scope=None, lastdate=None, games=5):
 
     return form
 
-def __buildTable(season=currentSeason(), lastdate=None):
+def __buildTable(season=currentSeason(), lastdate=None, league=const.PREMIER_LEAGUE, tableType=const.TABLE_FULL):
 
     # Analyse results for season & generate a league table
     # Table format
 
-    # _id: hash of table date
+    # _id: hash of league + type + table date
     # date: date table goes up to i.e. date of last fixture
     # season: season id tag e.g. 2018
+    # league: premier-league
+    # type: "full" 
     # standings {  - a dictionary containing 1 dictionary per team
     #   "liverpool":     # This is the __teamnameSlug e.g. west-ham-united
     #   {
@@ -299,7 +333,8 @@ def __buildTable(season=currentSeason(), lastdate=None):
 
     query = {}
     query["season"] = season
-    
+    query["league"] = league
+
     if lastdate != None:
         parsed_date = parse(str(lastdate))
         query["date"] = {"$lte":parsed_date}
@@ -309,6 +344,8 @@ def __buildTable(season=currentSeason(), lastdate=None):
     table = {}
     table["date"] = None
     table["season"] = season
+    table["league"] = league
+    table["type"] = tableType    
     table["standings"] = {}
 
     standings = {}
@@ -373,7 +410,10 @@ def __buildTable(season=currentSeason(), lastdate=None):
 
     table["standings"] = standings
     table["date"] = parse(str(lastFixtureDate))
-    table["_id"] = hashlib.sha1(str(table["date"]).encode()).hexdigest()
+    
+    # generate _id hash
+    idhash = league + tableType + str(table["date"])
+    table["_id"] = hashlib.sha1(idhash.encode()).hexdigest()
 
     # Calculate Totals
     for team in table["standings"]:
@@ -407,8 +447,11 @@ def __buildTable(season=currentSeason(), lastdate=None):
 
     return table
 
-# scope must be home or away
-def getTable(season=currentSeason(), scope=None, lastdate=datetime.datetime.now()):
+# scope must be totals, home or away
+def getTable(league=const.PREMIER_LEAGUE, season=currentSeason(), 
+            scope=None, tableType=const.TABLE_FULL, 
+            lastdate=datetime.datetime.now()
+            ):
 
     # Sanity check
     if season == None:
@@ -417,7 +460,11 @@ def getTable(season=currentSeason(), scope=None, lastdate=datetime.datetime.now(
         lastdate = datetime.datetime.now()
     if scope not in ["totals","home","away"]:
         scope = "totals"
-
+    if league == None:
+        league = const.PREMIER_LEAGUE
+    if tableType == None:
+        tableType = const.TABLE_FULL
+        
     lastdate = parse(str(lastdate))
 
     # scope will order the final table by home, away or combined totals
@@ -429,6 +476,8 @@ def getTable(season=currentSeason(), scope=None, lastdate=datetime.datetime.now(
 
     query = {}
     query["season"] = season
+    query["league"] = league
+    query["type"] = tableType
 
     # add date filter to query
     query["date"] = {"$lte":lastdate}
@@ -439,7 +488,7 @@ def getTable(season=currentSeason(), scope=None, lastdate=datetime.datetime.now(
         data = db.tables.find(query).sort("date", -1).limit(1).next() 
     except StopIteration:
         print ("No tables found - Generate one")
-        data = __buildTable(season, lastdate)
+        data = __buildTable(season, lastdate, league, tableType)
         if data == None:
             print ("No tables could be generated")
             return None
@@ -459,7 +508,7 @@ def getTable(season=currentSeason(), scope=None, lastdate=datetime.datetime.now(
         games = db.results.find(query).sort("date", -1).limit(1)
 
         # Generate a new table            
-        data = __buildTable(season, parse(str(games[0]["date"])))
+        data = __buildTable(season, parse(str(games[0]["date"])), league, tableType)
 
         if data == None:
             print ("No tables could be generated")
@@ -487,10 +536,11 @@ def printTable(table):
                 " " + str(x[1]["totals"]["form"]))
 
 
+scrapeFixtures(2018,const.LA_LIGA)
+scrapeFixtures(2018,const.PREMIER_LEAGUE)
 
+#printTable(getTable(const.LA_LIGA,2018))
+#printTable(getTable(const.PREMIER_LEAGUE,2018))
 
-
-#scrapeFixtures(2018)
-#printTable(getTable(None))
 #getFixtures(2018,"Liverpool",True)
 

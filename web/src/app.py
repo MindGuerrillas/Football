@@ -2,11 +2,11 @@
 
 from flask import Flask, redirect, url_for
 from flask import render_template
-import football
+import football as fb
+from football import const
 import html
 
 app = Flask(__name__)
-
 
 @app.route("/")
 def home():
@@ -17,14 +17,15 @@ def home():
     return output
 
 
-@app.route("/results/")
-@app.route("/results/<int:season>/")
-@app.route("/results/<int:season>/<team>/")
-@app.route("/results/<int:season>/<int:month>/<team>/")
-def results(season=None, team=None, month=None):
+@app.route("/<league>/results/")
+@app.route("/<league>/results/<int:season>/")
+@app.route("/<league>/results/<int:season>/<team>/")
+@app.route("/<league>/results/<int:season>/<int:month>/")
+@app.route("/<league>/results/<int:season>/<int:month>/<team>/")
+def results(league, season=None, team=None, month=None):
 
-    fixtures = football.getFixtures(season, team, month)
-
+    fixtures = fb.getFixtures(league, season, team, month)
+    
     output = ""
 
     for fixture in fixtures:
@@ -36,12 +37,13 @@ def results(season=None, team=None, month=None):
     return render_template('results.html', data=fixtures)
 
 
-@app.route("/table/")
-@app.route("/table/<int:season>/")
-@app.route("/table/<int:season>/<string:scope>/")
-@app.route("/table/<int:season>/<int:month>/<int:day>/")
-@app.route("/table/<int:season>/<int:month>/<int:day>/<scope>/")
-def table(season=None, scope="totals", month=None, day=None):
+@app.route("/tables/")  # defaults to current premier league
+@app.route("/<league>/table/")
+@app.route("/<league>/table/<int:season>/")
+@app.route("/<league>/table/<int:season>/<string:scope>/")
+@app.route("/<league>/table/<int:season>/<int:month>/<int:day>/")
+@app.route("/<league>/table/<int:season>/<int:month>/<int:day>/<scope>/")
+def tables(league=None, season=None, scope="totals", month=None, day=None):
 
     # sanity check on scope
     if scope not in ["totals", "home", "away"]:
@@ -51,9 +53,9 @@ def table(season=None, scope="totals", month=None, day=None):
 
     if (season != None) and (month != None) and (day != None):
         lastdate = str(season) + "-" + str(month) + "-" + str(day)
-        season = football.whichSeason(month, season)
+        season = fb.whichSeason(month, season)
 
-    table = football.getTable(season, scope, lastdate)
+    table = fb.getTable(league, season, scope, const.TABLE_FULL, lastdate)
 
     if table:
         return render_template('table.html', data=table, scope=scope)
