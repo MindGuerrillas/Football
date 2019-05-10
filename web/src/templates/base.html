@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+    <title>{% block title %}{% endblock %}</title>
+
+    <style type="text/css">
+        .clearfloat {clear: both}
+        {% block stylesheets %}
+        {% endblock %}
+    </style>
+    
+</head>
+
+<body>    
+
+    <div id="header">
+        
+    </div>
+
+    <div id="content">
+        {% block content %}{% endblock %}
+    </div>
+
+    <BR><BR>
+    <div id="footer">
+        
+    </div>
+
+</body>
+</html>

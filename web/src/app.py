@@ -58,7 +58,7 @@ def tables(league=None, season=None, scope="totals", month=None, day=None):
     table = fb.getTable(league, season, scope, const.TABLE_FULL, lastdate)
 
     if table:
-        return render_template('table.html', data=table, scope=scope)
+        return render_template('table.html', data=table, scope=scope, league=league)
     else:
         # No table returned: Error
         return redirect(url_for("home"))
