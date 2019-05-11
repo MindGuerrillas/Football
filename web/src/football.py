@@ -10,6 +10,7 @@ import datetime
 import constant as const
 import unicodedata
 import utilities as utils
+from collections import deque
 
 # BBC Sport Football results scraper v0.3
 
@@ -236,53 +237,7 @@ def getFixtures(league=const.PREMIER_LEAGUE, season=currentSeason(), club=None, 
 
     return list(fixtures)
 
-
-def getTeamForm(team, scope=None, lastdate=None, games=5):
-
-    query = {}
-
-    team = __teamnameSlug(team)
-
-    if lastdate != None:
-        parsed_date = parse(str(lastdate))
-        query["date"] = {"$lte":parsed_date}
-
-    if scope == "home":
-        query["home.teamslug"] = team
-    elif scope == "away":
-        query["away.teamslug"] = team
-    else:
-        query["$or"] = [{"home.teamslug": team}, {"away.teamslug": team}]
-
-    db = getDatabase()
-    
-    fixtures = db.results.find(query).sort("date", -1).limit(games)
-
-    form = []
-    
-    for fixture in fixtures:
-
-        # Is it a home game?
-        if fixture["home"]["teamslug"] == team:
-            if fixture["home"]["score"] > fixture["away"]["score"]:
-                form.append("W")
-            elif fixture["home"]["score"] < fixture["away"]["score"]:
-                form.append("L")
-            else:
-                form.append("D")
-        else:
-            if fixture["home"]["score"] < fixture["away"]["score"]:
-                form.append("W")
-            elif fixture["home"]["score"] > fixture["away"]["score"]:
-                form.append("L")
-            else:
-                form.append("D") 
-
-    form.reverse()
-
-    return form
-
-def __buildTable(season=currentSeason(), lastdate=None, league=const.PREMIER_LEAGUE, tableType=const.TABLE_FULL):
+def __buildTable(season=currentSeason(), lastdate=None, league=const.PREMIER_LEAGUE, teamFilter=[]):
 
     # Analyse results for season & generate a league table
     # Table format
@@ -291,7 +246,7 @@ def __buildTable(season=currentSeason(), lastdate=None, league=const.PREMIER_LEA
     # date: date table goes up to i.e. date of last fixture
     # season: season id tag e.g. 2018
     # league: premier-league
-    # type: "full" 
+    # filter: [] - list of teamslugs to filter by 
     # standings {  - a dictionary containing 1 dictionary per team
     #   "liverpool":     # This is the __teamnameSlug e.g. west-ham-united
     #   {
@@ -343,16 +298,11 @@ def __buildTable(season=currentSeason(), lastdate=None, league=const.PREMIER_LEA
         parsed_date = parse(str(lastdate))
         query["date"] = {"$lte":parsed_date}
 
-    if tableType != const.TABLE_FULL:
+    if teamFilter != []:
+        query["home.teamslug"] = { "$in": teamFilter}
+        query["away.teamslug"] = { "$in": teamFilter}
 
-        teamsFilter = []
-
-        if tableType == const.TABLE_TOPTEAMS:
-            teamsFilter = const.TOPTEAMS[league]
-
-        query["home.teamslug"] = { "$in": teamsFilter}
-        query["away.teamslug"] = { "$in": teamsFilter}
-
+    utils.debuggingPrint("Running Query: " + str(query))
 
     fixtures = db.results.find(query).sort([("date", 1), ("home.team", 1)])
 
@@ -360,7 +310,7 @@ def __buildTable(season=currentSeason(), lastdate=None, league=const.PREMIER_LEA
     table["date"] = None
     table["season"] = season
     table["league"] = league
-    table["type"] = tableType    
+    table["filter"] = teamFilter    
     table["standings"] = {}
 
     standings = {}
@@ -383,9 +333,9 @@ def __buildTable(season=currentSeason(), lastdate=None, league=const.PREMIER_LEA
             if team["teamslug"] not in standings:
                 standings[team["teamslug"]] = {
                                     "teamname": team["team"],
-                                    "home": {"played": 0,"won": 0,"drawn": 0,"lost": 0,"for": 0,"against": 0,"gd": 0,"points": 0},
-                                    "away": {"played": 0,"won": 0,"drawn": 0,"lost": 0,"for": 0,"against": 0,"gd": 0,"points": 0},
-                                    "totals": {"played": 0,"won": 0,"drawn": 0,"lost": 0,"for": 0,"against": 0,"gd": 0,"points": 0}
+                                    "home": {"played": 0,"won": 0,"drawn": 0,"lost": 0,"for": 0,"against": 0,"gd": 0,"points": 0,"form": deque([],5)},
+                                    "away": {"played": 0,"won": 0,"drawn": 0,"lost": 0,"for": 0,"against": 0,"gd": 0,"points": 0,"form": deque([],5)},
+                                    "totals": {"played": 0,"won": 0,"drawn": 0,"lost": 0,"for": 0,"against": 0,"gd": 0,"points": 0,"form": deque([],5)}
                                 }
         
         # Add goals to table
@@ -398,22 +348,38 @@ def __buildTable(season=currentSeason(), lastdate=None, league=const.PREMIER_LEA
         standings[away["teamslug"]]["away"]["against"] += home["score"]
         standings[away["teamslug"]]["away"]["gd"] += (away["score"] - home["score"])       
 
-        # Who won?
+        # Who won? # Update Points and Form for each outcome
         if home["score"] > away["score"]: # Home Win
             standings[home["teamslug"]]["home"]["won"] += 1
             standings[home["teamslug"]]["home"]["points"] += 3
             standings[away["teamslug"]]["away"]["lost"] += 1
+            
+            standings[home["teamslug"]]["home"]["form"].append("W")
+            standings[away["teamslug"]]["away"]["form"].append("L")            
+            standings[home["teamslug"]]["totals"]["form"].append("W")
+            standings[away["teamslug"]]["totals"]["form"].append("L")
 
         elif away["score"] > home["score"]: # Away Win
             standings[away["teamslug"]]["away"]["won"] += 1
             standings[away["teamslug"]]["away"]["points"] += 3
             standings[home["teamslug"]]["home"]["lost"] += 1
+
+            standings[home["teamslug"]]["home"]["form"].append("L")
+            standings[away["teamslug"]]["away"]["form"].append("W")
+            standings[home["teamslug"]]["totals"]["form"].append("L")
+            standings[away["teamslug"]]["totals"]["form"].append("W")            
+                        
         else: # draw
             standings[home["teamslug"]]["home"]["drawn"] += 1
             standings[home["teamslug"]]["home"]["points"] += 1
             standings[away["teamslug"]]["away"]["drawn"] += 1
             standings[away["teamslug"]]["away"]["points"] += 1
-        
+
+            standings[home["teamslug"]]["home"]["form"].append("D")
+            standings[away["teamslug"]]["away"]["form"].append("D")
+            standings[home["teamslug"]]["totals"]["form"].append("D")
+            standings[away["teamslug"]]["totals"]["form"].append("D")
+
         # Add the game
         standings[home["teamslug"]]["home"]["played"] += 1
         standings[away["teamslug"]]["away"]["played"] += 1
@@ -428,7 +394,7 @@ def __buildTable(season=currentSeason(), lastdate=None, league=const.PREMIER_LEA
     table["date"] = parse(str(lastFixtureDate))
     
     # generate _id hash
-    idhash = league + tableType + str(table["date"])
+    idhash = league + str(teamFilter) + str(table["date"])
     table["_id"] = hashlib.sha1(idhash.encode()).hexdigest()
 
     # Calculate Totals
@@ -439,11 +405,10 @@ def __buildTable(season=currentSeason(), lastdate=None, league=const.PREMIER_LEA
         for item in ["played","won","lost","drawn","for","against","gd","points"]:
             t["totals"][item] = t["home"][item] + t["away"][item]
             
-        # Form
+        # Form - change deque objects to list for json storage
         for scope in ["home","away","totals"]:
-            t[scope]["form"] = getTeamForm(team,scope,table["date"])
+            t[scope]["form"] = list(t[scope]["form"])
         
-
     # Save table to DB
     # specify collection
     collection = db.tables
@@ -465,7 +430,7 @@ def __buildTable(season=currentSeason(), lastdate=None, league=const.PREMIER_LEA
 
 # scope must be totals, home or away
 def getTable(league=const.PREMIER_LEAGUE, season=currentSeason(), 
-            scope=None, tableType=const.TABLE_FULL, 
+            scope=None, teamFilter=[], 
             lastdate=datetime.datetime.now()
             ):
 
@@ -478,8 +443,9 @@ def getTable(league=const.PREMIER_LEAGUE, season=currentSeason(),
         scope = "totals"
     if league == None:
         league = const.PREMIER_LEAGUE
-    if tableType == None:
-        tableType = const.TABLE_FULL
+
+    # Sort teamFilter to ensure matches
+    teamFilter.sort()
 
     lastdate = parse(str(lastdate))
 
@@ -493,7 +459,7 @@ def getTable(league=const.PREMIER_LEAGUE, season=currentSeason(),
     query = {}
     query["season"] = season
     query["league"] = league
-    query["type"] = tableType
+    query["filter"] = teamFilter
 
     # add date filter to query
     query["date"] = {"$lte":lastdate}
@@ -504,7 +470,7 @@ def getTable(league=const.PREMIER_LEAGUE, season=currentSeason(),
         data = db.tables.find(query).sort("date", -1).limit(1).next() 
     except StopIteration:
         utils.debuggingPrint("No tables found - Generate one")
-        data = __buildTable(season, lastdate, league, tableType)
+        data = __buildTable(season, lastdate, league, teamFilter)
         if data == None:
             utils.debuggingPrint("No tables could be generated")
             return None
@@ -517,19 +483,13 @@ def getTable(league=const.PREMIER_LEAGUE, season=currentSeason(),
     resultsquery["league"] = league
     resultsquery["date"] = {"$gt":data["date"],"$lte":lastdate}
     
-    if tableType != const.TABLE_FULL:
-
-        teamsFilter = []
-
-        if tableType == const.TABLE_TOPTEAMS:
-            teamsFilter = const.TOPTEAMS[league]
-
-        resultsquery["home.teamslug"] = { "$in": teamsFilter}
-        resultsquery["away.teamslug"] = { "$in": teamsFilter}
+    if teamFilter != []:
+        resultsquery["home.teamslug"] = { "$in": teamFilter}
+        resultsquery["away.teamslug"] = { "$in": teamFilter}
 
     numberofgames = db.results.count_documents(resultsquery)
     
-    utils.debuggingPrint("Number of new games found:" + str(numberofgames) + " from " + str(resultsquery))
+    #utils.debuggingPrint("Number of new games found:" + str(numberofgames) + " from " + str(resultsquery))
 
     if numberofgames > 0:
         
@@ -538,7 +498,7 @@ def getTable(league=const.PREMIER_LEAGUE, season=currentSeason(),
 
         # Generate a new table     
         print ("Building New table for Extra Games")       
-        data = __buildTable(season, parse(str(games[0]["date"])), league, tableType)
+        data = __buildTable(season, parse(str(games[0]["date"])), league, teamFilter)
 
         if data == None:
             utils.debuggingPrint("No tables could be generated")
@@ -546,7 +506,7 @@ def getTable(league=const.PREMIER_LEAGUE, season=currentSeason(),
 
     standings = data["standings"]
 
-    # Sort by Name, Goals For, GD and then Points
+    # Sort by Name, Goals For, GD and then Points for the requested scope (home, away, totals)
     # return sorted list - table  [ (team, {data}) ]
     table = sorted(standings.items(),key=lambda x: x[0])
     table = sorted(table,key=lambda x: x[1][scope]["for"], reverse=True)
@@ -569,9 +529,7 @@ def printTable(table):
 #scrapeFixtures(2018,const.LA_LIGA)
 #scrapeFixtures(2018,const.PREMIER_LEAGUE)
 
-#printTable(getTable(const.LA_LIGA,2018))
+printTable(getTable(const.PREMIER_LEAGUE,2018,None,const.TOPTEAMS[const.PREMIER_LEAGUE]))
 
-printTable(getTable(const.PREMIER_LEAGUE,2018,None,const.TABLE_TOPTEAMS))
-
+#printTable(getTable(const.PREMIER_LEAGUE,2018,None,const.TABLE_TOPTEAMS))
 #getFixtures(2018,"Liverpool",True)
-

@@ -55,7 +55,11 @@ def tables(league=None, season=None, scope="totals", month=None, day=None):
         lastdate = str(season) + "-" + str(month) + "-" + str(day)
         season = fb.whichSeason(month, season)
 
-    table = fb.getTable(league, season, scope, const.TABLE_FULL, lastdate)
+    teamFilter = []
+
+    #teamFilter = const.TOPTEAMS[league]
+    
+    table = fb.getTable(league, season, scope, teamFilter, lastdate)
 
     if table:
         return render_template('table.html', data=table, scope=scope, league=league)

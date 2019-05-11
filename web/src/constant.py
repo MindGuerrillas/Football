@@ -19,10 +19,6 @@ CHAMPIONSHIP    =   "championship"
 LA_LIGA         =   "spanish-la-liga"
 
 
-# Table Types
-TABLE_FULL      =   "full"
-TABLE_TOPTEAMS  =   "topteams"
-
 TOPTEAMS = {
             "premier-league" : ["liverpool","manchester-united","manchester-city","arsenal","chelsea","tottenham-hotspur"],
             "spanish-la-liga" : ["real-madrid","barcelona","valencia","sevilla","atletico-madrid"]
