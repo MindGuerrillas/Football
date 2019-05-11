@@ -9,6 +9,7 @@ import hashlib
 import datetime
 import constant as const
 import unicodedata
+import utilities as utils
 
 # BBC Sport Football results scraper v0.3
 
@@ -73,6 +74,9 @@ def __teamnameSlug(team):
 
     return strip_accents(team).lower().replace(" ", "-")
 
+def __teamnameSlugReverse(teamslug):
+    return teamslug.capitalize().replace("-", " ")
+
 
 # __scrapeMonthlyFixtures() returns a list of dictionary objects.
 # Each dictionary contains details of one fixture
@@ -87,7 +91,7 @@ def __scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None, league=const.
 
     url = const.BASE_URL.replace("LEAGUETAG", league) + dateslug + "?filter=results"
 
-    print ("Scraping " + url)
+    utils.debuggingPrint("Scraping " + url)
     
     page = requests.get(url)
 
@@ -175,7 +179,7 @@ def scrapeFixtures(currentyear=currentSeason(), league=const.PREMIER_LEAGUE,
 
         results.extend(__scrapeMonthlyFixtures(currentyear, currentmonth, league))
 
-        #print ("Getting: " + str(currentmonth) + " " + str(currentyear))
+        utils.debuggingPrint("Getting: " + str(currentmonth) + " " + str(currentyear))
 
         if currentmonth >= 12:
             currentmonth = 1
@@ -188,7 +192,7 @@ def scrapeFixtures(currentyear=currentSeason(), league=const.PREMIER_LEAGUE,
     # specify collection
     collection = db.results
 
-    print ("Saving " + str(len(results)) + " results" )
+    utils.debuggingPrint("Saving " + str(len(results)) + " results" )
 
     # save results to database
     try:
@@ -339,6 +343,10 @@ def __buildTable(season=currentSeason(), lastdate=None, league=const.PREMIER_LEA
         parsed_date = parse(str(lastdate))
         query["date"] = {"$lte":parsed_date}
 
+    if tableType == const.TABLE_TOPTEAMS:
+        query["home.teamslug"] = { "$in": const.TOPTEAMS[league]}
+        query["away.teamslug"] = { "$in": const.TOPTEAMS[league]}
+
     fixtures = db.results.find(query).sort([("date", 1), ("home.team", 1)])
 
     table = {}
@@ -406,6 +414,7 @@ def __buildTable(season=currentSeason(), lastdate=None, league=const.PREMIER_LEA
         fixture_count += 1
 
     if fixture_count == 0: # No fixtures processed so no table either
+        utils.debuggingPrint("No games found - No table produced")
         return None
 
     table["standings"] = standings
@@ -464,7 +473,7 @@ def getTable(league=const.PREMIER_LEAGUE, season=currentSeason(),
         league = const.PREMIER_LEAGUE
     if tableType == None:
         tableType = const.TABLE_FULL
-        
+
     lastdate = parse(str(lastdate))
 
     # scope will order the final table by home, away or combined totals
@@ -487,31 +496,39 @@ def getTable(league=const.PREMIER_LEAGUE, season=currentSeason(),
         # pull the latest table from the database
         data = db.tables.find(query).sort("date", -1).limit(1).next() 
     except StopIteration:
-        print ("No tables found - Generate one")
+        utils.debuggingPrint("No tables found - Generate one")
         data = __buildTable(season, lastdate, league, tableType)
         if data == None:
-            print ("No tables could be generated")
+            utils.debuggingPrint("No tables could be generated")
             return None
 
     # If there are any games between table date and lastdate then
     # generate new table for date of last game
 
-    query = {}
-    query["season"] = season
-    query["date"] = {"$gt":data["date"],"$lte":lastdate}
-
-    numberofgames = db.results.count_documents(query)
+    resultsquery = {}
+    resultsquery["season"] = season
+    resultsquery["league"] = league
+    resultsquery["date"] = {"$gt":data["date"],"$lte":lastdate}
     
+    if tableType == const.TABLE_TOPTEAMS:
+        resultsquery["home.teamslug"] = { "$in": const.TOPTEAMS[league]}
+        resultsquery["away.teamslug"] = { "$in": const.TOPTEAMS[league]}
+
+    numberofgames = db.results.count_documents(resultsquery)
+    
+    utils.debuggingPrint("Number of new games found:" + str(numberofgames) + " from " + str(resultsquery))
+
     if numberofgames > 0:
         
         # Get date of the latest game
-        games = db.results.find(query).sort("date", -1).limit(1)
+        games = db.results.find(resultsquery).sort("date", -1).limit(1)
 
-        # Generate a new table            
+        # Generate a new table     
+        print ("Building New table for Extra Games")       
         data = __buildTable(season, parse(str(games[0]["date"])), league, tableType)
 
         if data == None:
-            print ("No tables could be generated")
+            utils.debuggingPrint("No tables could be generated")
             return None
 
     standings = data["standings"]
@@ -536,11 +553,12 @@ def printTable(table):
                 " " + str(x[1]["totals"]["form"]))
 
 
-scrapeFixtures(2018,const.LA_LIGA)
-scrapeFixtures(2018,const.PREMIER_LEAGUE)
+#scrapeFixtures(2018,const.LA_LIGA)
+#scrapeFixtures(2018,const.PREMIER_LEAGUE)
 
 #printTable(getTable(const.LA_LIGA,2018))
-#printTable(getTable(const.PREMIER_LEAGUE,2018))
+
+printTable(getTable(const.PREMIER_LEAGUE,2018,None,const.TABLE_TOPTEAMS))
 
 #getFixtures(2018,"Liverpool",True)
 

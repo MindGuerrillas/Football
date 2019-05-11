@@ -5,6 +5,8 @@ MONGODB_SERVER      =   "mongo"
 MONGODB_USER        =   "root"
 MONGODB_PASSWORD    =   "example"
 
+VERBOSE             =   True
+
 # dateslug "/2019-04"
 BASE_URL = "https://www.bbc.co.uk/sport/football/LEAGUETAG/scores-fixtures/"
 
@@ -19,6 +21,9 @@ LA_LIGA         =   "spanish-la-liga"
 
 # Table Types
 TABLE_FULL      =   "full"
-TABLE_TOP_6     =   "top6"
-TABLE_BOTTOM_6  =   "bottom6"
-TABLE_CUSTOM    =   "custom"
+TABLE_TOPTEAMS  =   "topteams"
+
+TOPTEAMS = {
+            "premier-league" : ["liverpool","manchester-united","manchester-city","arsenal","chelsea","tottenham-hotspur"],
+            "spanish-la-liga" : ["real-madrid","barcelona","valencia","sevilla","atletico-madrid"]
+        }

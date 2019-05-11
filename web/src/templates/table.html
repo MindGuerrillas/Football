@@ -2,14 +2,6 @@
 
 {% block title %}Table {% endblock%}
 
-{% block stylesheets %}
-        .table_team {width: 210px}
-        .form {width: 15px; height: 15px; float: left; margin: 1px}
-        .W {background-color: green}
-        .D {background-color: gray}
-        .L {background-color: red}        
-{% endblock %}
-
 {% block content%}
 
         <div>
@@ -20,6 +12,12 @@
             <table>
                 <tr>
                     <td class="table_team"></td>
+                    <td>P</td>
+                    <td>W</td>
+                    <td>D</td>
+                    <td>L</td>
+                    <td>F</td>
+                    <td>A</td>                              
                     <td>GD</td>
                     <td>Pts</td>
                     <td>Form</td>
@@ -27,8 +25,15 @@
 
             {% for row in data %}
                 <tr>
-                    <td><img src="/static/images/logos/{{league}}/{{row[0]}}.png" width="20px">
+                    <td><img class="table_logo" src="/static/images/logos/{{league}}/{{row[0]}}.png">
                         {{ row[1]["teamname"] }}</td>
+                    
+                    <td>{{ row[1][scope]["played"]}}</td>
+                    <td>{{ row[1][scope]["won"]}}</td>
+                    <td>{{ row[1][scope]["drawn"]}}</td>
+                    <td>{{ row[1][scope]["lost"]}}</td>
+                    <td>{{ row[1][scope]["for"]}}</td> 
+                    <td>{{ row[1][scope]["against"]}}</td> 
                     <td>{{ row[1][scope]["gd"]}}</td>
                     <td>{{ row[1][scope]["points"]}}</td>
                     <td>
@@ -39,9 +44,6 @@
                             
                             <div class="clearfloat"></div>
                         </div>
-
-                    
-                    
                     </td>
                 </tr>
             {% endfor %}

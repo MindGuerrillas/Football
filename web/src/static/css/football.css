@@ -1,0 +1,12 @@
+.clearfloat {clear: both}
+
+body {font-size: 0.8em; font-family: calibre-light,arial,"sans serif";}
+
+
+/* Table formatting */
+img.table_logo {width: 20px; vertical-align:middle}
+.table_team {width: 210px;}
+.form {width: 15px; height: 15px; float: left; margin: 1px;}
+.W {background-color: green;}
+.D {background-color: gray;}
+.L {background-color: red;}     
