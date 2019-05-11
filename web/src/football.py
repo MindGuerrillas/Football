@@ -343,9 +343,16 @@ def __buildTable(season=currentSeason(), lastdate=None, league=const.PREMIER_LEA
         parsed_date = parse(str(lastdate))
         query["date"] = {"$lte":parsed_date}
 
-    if tableType == const.TABLE_TOPTEAMS:
-        query["home.teamslug"] = { "$in": const.TOPTEAMS[league]}
-        query["away.teamslug"] = { "$in": const.TOPTEAMS[league]}
+    if tableType != const.TABLE_FULL:
+
+        teamsFilter = []
+
+        if tableType == const.TABLE_TOPTEAMS:
+            teamsFilter = const.TOPTEAMS[league]
+
+        query["home.teamslug"] = { "$in": teamsFilter}
+        query["away.teamslug"] = { "$in": teamsFilter}
+
 
     fixtures = db.results.find(query).sort([("date", 1), ("home.team", 1)])
 
@@ -510,9 +517,15 @@ def getTable(league=const.PREMIER_LEAGUE, season=currentSeason(),
     resultsquery["league"] = league
     resultsquery["date"] = {"$gt":data["date"],"$lte":lastdate}
     
-    if tableType == const.TABLE_TOPTEAMS:
-        resultsquery["home.teamslug"] = { "$in": const.TOPTEAMS[league]}
-        resultsquery["away.teamslug"] = { "$in": const.TOPTEAMS[league]}
+    if tableType != const.TABLE_FULL:
+
+        teamsFilter = []
+
+        if tableType == const.TABLE_TOPTEAMS:
+            teamsFilter = const.TOPTEAMS[league]
+
+        resultsquery["home.teamslug"] = { "$in": teamsFilter}
+        resultsquery["away.teamslug"] = { "$in": teamsFilter}
 
     numberofgames = db.results.count_documents(resultsquery)
     
