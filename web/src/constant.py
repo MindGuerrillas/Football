@@ -13,6 +13,9 @@ BASE_URL = "https://www.bbc.co.uk/sport/football/LEAGUETAG/scores-fixtures/"
 SEASON_START_MONTH  =   8
 SEASON_LENGTH       =   10
 
+SORT_ORDER_ASC      =   1
+SORT_ORDER_DESC     =   -1
+
 # Leagues
 PREMIER_LEAGUE  =   "premier-league"
 CHAMPIONSHIP    =   "championship"

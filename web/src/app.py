@@ -41,25 +41,37 @@ def results(league, season=None, team=None, month=None):
 @app.route("/<league>/table/")
 @app.route("/<league>/table/<int:season>/")
 @app.route("/<league>/table/<int:season>/<string:scope>/")
-@app.route("/<league>/table/<int:season>/<int:month>/<int:day>/")
-@app.route("/<league>/table/<int:season>/<int:month>/<int:day>/<scope>/")
-def tables(league=None, season=None, scope="totals", month=None, day=None):
+
+@app.route("/<league>/table/until/<int:untilseason>/<int:untilmonth>/<int:untilday>/")
+@app.route("/<league>/table/until/<int:untilseason>/<int:untilmonth>/<int:untilday>/<scope>/")
+
+@app.route("/<league>/table/from/<int:fromseason>/<int:frommonth>/<int:fromday>/")
+@app.route("/<league>/table/from/<int:fromseason>/<int:frommonth>/<int:fromday>/<scope>/")
+
+@app.route("/<league>/table/from/<int:fromseason>/<int:frommonth>/<int:fromday>/until/<int:untilseason>/<int:untilmonth>/<int:untilday>/")
+@app.route("/<league>/table/from/<int:fromseason>/<int:frommonth>/<int:fromday>/until/<int:untilseason>/<int:untilmonth>/<int:untilday>/<scope>/")
+
+def tables(league=None, season=None, scope="totals", 
+            fromseason=None, frommonth=None, fromday=None,
+            untilseason=None, untilmonth=None, untilday=None
+            ):
 
     # sanity check on scope
     if scope not in ["totals", "home", "away"]:
         return redirect(url_for("home"))
 
-    lastdate = None
+    fromdate = None
+    untildate = None
 
-    if (season != None) and (month != None) and (day != None):
-        lastdate = str(season) + "-" + str(month) + "-" + str(day)
-        season = fb.whichSeason(month, season)
+    if (untilseason != None) and (untilmonth != None) and (untilday != None):
+        untildate = str(untilseason) + "-" + str(untilmonth) + "-" + str(untilday)
+        season = fb.whichSeason(untilmonth, untilseason)
 
-    teamFilter = []
+    if (fromseason != None) and (frommonth != None) and (fromday != None):
+        fromdate = str(fromseason) + "-" + str(frommonth) + "-" + str(fromday)
+        season = fb.whichSeason(frommonth, fromseason)
 
-    #teamFilter = const.TOPTEAMS[league]
-    
-    table = fb.getTable(league, season, scope, teamFilter, lastdate)
+    table = fb.getTable(league, season, scope, [], fromdate, untildate)
 
     if table:
         return render_template('table.html', data=table, scope=scope, league=league)

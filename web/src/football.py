@@ -237,13 +237,34 @@ def getFixtures(league=const.PREMIER_LEAGUE, season=currentSeason(), club=None, 
 
     return list(fixtures)
 
-def __buildTable(season=currentSeason(), lastdate=None, league=const.PREMIER_LEAGUE, teamFilter=[]):
+
+# Get the date of the nearest game to the given targetDate for the given query
+# Either before it SORT_ORDER_DESC or after it SORT_ORDER_ASC
+def getNearestGameDate(query, targetDate, beforeOrAfter):
+    
+    db = getDatabase()
+
+    if beforeOrAfter == const.SORT_ORDER_ASC:
+        query["date"] = {"$gte":targetDate}
+    elif beforeOrAfter == const.SORT_ORDER_DESC:
+        query["date"] = {"$lte":targetDate}
+
+    game = db.results.find(query).sort("date", beforeOrAfter).limit(1)
+    
+    for result in game:
+        return result["date"]
+
+    return targetDate
+
+def __buildTable(league=const.PREMIER_LEAGUE, season=currentSeason(), fromDate=None, untilDate=None, teamFilter=[]):
 
     # Analyse results for season & generate a league table
     # Table format
 
     # _id: hash of league + type + table date
-    # date: date table goes up to i.e. date of last fixture
+    # fromdate: date the table starts at
+    # untildate: date table goes up to i.e. date of last fixture
+    # created: datetime that table was generated
     # season: season id tag e.g. 2018
     # league: premier-league
     # filter: [] - list of teamslugs to filter by 
@@ -290,26 +311,36 @@ def __buildTable(season=currentSeason(), lastdate=None, league=const.PREMIER_LEA
     # Get all the results
     db = getDatabase()
 
-    query = {}
-    query["season"] = season
-    query["league"] = league
+    resultsQuery = {}
+    resultsQuery["season"] = season
+    resultsQuery["league"] = league
+    
+    dateFilter  = {}
 
-    if lastdate != None:
-        parsed_date = parse(str(lastdate))
-        query["date"] = {"$lte":parsed_date}
+    if untilDate != None:
+        dateFilter["$lte"] = parse(str(untilDate))
+    if fromDate != None:
+        dateFilter["$gte"] = parse(str(fromDate))
+    if dateFilter:
+        resultsQuery["date"] = dateFilter
+
 
     if teamFilter != []:
-        query["home.teamslug"] = { "$in": teamFilter}
-        query["away.teamslug"] = { "$in": teamFilter}
+        resultsQuery["home.teamslug"] = { "$in": teamFilter}
+        resultsQuery["away.teamslug"] = { "$in": teamFilter}
 
-    utils.debuggingPrint("Running Query: " + str(query))
+    utils.debuggingPrint("Running Results Query: " + str(resultsQuery))
 
-    fixtures = db.results.find(query).sort([("date", 1), ("home.team", 1)])
+    fixtures = db.results.find(resultsQuery).sort([("date", 1), ("home.team", 1)])
 
     table = {}
-    table["date"] = None
-    table["season"] = season
     table["league"] = league
+    table["season"] = season
+
+    table["fromdate"] = parse(str(fromDate))
+    table["untildate"] = None
+    table["created"] = parse(str(datetime.datetime.now()))
+
     table["filter"] = teamFilter    
     table["standings"] = {}
 
@@ -391,10 +422,10 @@ def __buildTable(season=currentSeason(), lastdate=None, league=const.PREMIER_LEA
         return None
 
     table["standings"] = standings
-    table["date"] = parse(str(lastFixtureDate))
+    table["untildate"] = parse(str(lastFixtureDate))
     
     # generate _id hash
-    idhash = league + str(teamFilter) + str(table["date"])
+    idhash = league + str(teamFilter) + str(table["untildate"]) + str(table["fromdate"])
     table["_id"] = hashlib.sha1(idhash.encode()).hexdigest()
 
     # Calculate Totals
@@ -431,14 +462,20 @@ def __buildTable(season=currentSeason(), lastdate=None, league=const.PREMIER_LEA
 # scope must be totals, home or away
 def getTable(league=const.PREMIER_LEAGUE, season=currentSeason(), 
             scope=None, teamFilter=[], 
-            lastdate=datetime.datetime.now()
+            fromDate = None,
+            untilDate=datetime.datetime.now()            
             ):
 
-    # Sanity check
+    # Sanity check variables
     if season == None:
         season = currentSeason()
-    if lastdate == None:
-        lastdate = datetime.datetime.now()
+    if teamFilter == None:
+        teamFilter = []
+    if untilDate == None:
+        untilDate = datetime.datetime.now()
+    if fromDate == None:  # Default to beginning of season
+        fromDate = str(season) + "-" + str(const.SEASON_START_MONTH) + "-01" 
+    
     if scope not in ["totals","home","away"]:
         scope = "totals"
     if league == None:
@@ -447,7 +484,16 @@ def getTable(league=const.PREMIER_LEAGUE, season=currentSeason(),
     # Sort teamFilter to ensure matches
     teamFilter.sort()
 
-    lastdate = parse(str(lastdate))
+    # check for invalid dates being passed in
+    try:
+        untilDate = parse(str(untilDate))
+    except: # goto default setting
+        untilDate = parse(str(datetime.datetime.now()))
+    
+    try:
+        fromDate = parse(str(fromDate))
+    except: # goto default setting
+        fromDate = parse(str(season) + "-" + str(const.SEASON_START_MONTH) + "-01")
 
     # scope will order the final table by home, away or combined totals
     if (scope != "home") and (scope != "away"):
@@ -456,49 +502,45 @@ def getTable(league=const.PREMIER_LEAGUE, season=currentSeason(),
     # Get table
     db = getDatabase()
 
-    query = {}
-    query["season"] = season
-    query["league"] = league
-    query["filter"] = teamFilter
+    # 1. find nearest game dates for fromDate and untilDate
 
-    # add date filter to query
-    query["date"] = {"$lte":lastdate}
-
-    try:
-        # use .next() to get document rather than cursor
-        # pull the latest table from the database
-        data = db.tables.find(query).sort("date", -1).limit(1).next() 
-    except StopIteration:
-        utils.debuggingPrint("No tables found - Generate one")
-        data = __buildTable(season, lastdate, league, teamFilter)
-        if data == None:
-            utils.debuggingPrint("No tables could be generated")
-            return None
-
-    # If there are any games between table date and lastdate then
-    # generate new table for date of last game
-
-    resultsquery = {}
-    resultsquery["season"] = season
-    resultsquery["league"] = league
-    resultsquery["date"] = {"$gt":data["date"],"$lte":lastdate}
+    resultsQuery = {}
+    resultsQuery["league"] = league
+    resultsQuery["season"] = season
+    resultsQuery["date"] = {"$gte": fromDate,"$lte":untilDate}
     
     if teamFilter != []:
-        resultsquery["home.teamslug"] = { "$in": teamFilter}
-        resultsquery["away.teamslug"] = { "$in": teamFilter}
+        resultsQuery["home.teamslug"] = { "$in": teamFilter}
+        resultsQuery["away.teamslug"] = { "$in": teamFilter}
 
-    numberofgames = db.results.count_documents(resultsquery)
+    firstGameDate = getNearestGameDate(resultsQuery, fromDate, const.SORT_ORDER_ASC)
+    lastGameDate = getNearestGameDate(resultsQuery, untilDate, const.SORT_ORDER_DESC)
+
+    #utils.debuggingPrint("Target Date Range: " + str(fromDate) + " to " + str(untilDate))    
+    #utils.debuggingPrint("Game Date Range: " + str(firstGameDate) + " to " + str(lastGameDate))  
+
+    # 2. check if table exists for exact current parameters, match on _id hash
     
-    #utils.debuggingPrint("Number of new games found:" + str(numberofgames) + " from " + str(resultsquery))
+    # generate _id hash
+    idhash = league + str(teamFilter) + str(lastGameDate) + str(firstGameDate)
+    _id = hashlib.sha1(idhash.encode()).hexdigest()
 
-    if numberofgames > 0:
+    tableQuery = {}
+    tableQuery["_id"] = _id
+
+    utils.debuggingPrint("Search for Table _id: " + _id)
+
+    try:        
+        utils.debuggingPrint("Running Table Query: " + str(tableQuery))
         
-        # Get date of the latest game
-        games = db.results.find(resultsquery).sort("date", -1).limit(1)
+        # use .next() to get document rather than cursor
+        # pull the latest table from the database        
+        data = db.tables.find(tableQuery).sort("untildate", -1).limit(1).next() 
 
-        # Generate a new table     
-        print ("Building New table for Extra Games")       
-        data = __buildTable(season, parse(str(games[0]["date"])), league, teamFilter)
+    except StopIteration:
+        utils.debuggingPrint("No tables found - Generate one")
+
+        data = __buildTable(league, season, firstGameDate, lastGameDate, teamFilter)
 
         if data == None:
             utils.debuggingPrint("No tables could be generated")
@@ -507,7 +549,7 @@ def getTable(league=const.PREMIER_LEAGUE, season=currentSeason(),
     standings = data["standings"]
 
     # Sort by Name, Goals For, GD and then Points for the requested scope (home, away, totals)
-    # return sorted list - table  [ (team, {data}) ]
+    # return sorted list - table - as [ (team, {data}) ]
     table = sorted(standings.items(),key=lambda x: x[0])
     table = sorted(table,key=lambda x: x[1][scope]["for"], reverse=True)
     table = sorted(table,key=lambda x: x[1][scope]["gd"], reverse=True)
@@ -516,6 +558,8 @@ def getTable(league=const.PREMIER_LEAGUE, season=currentSeason(),
     closeDatabase()
 
     return table
+
+
 
 def printTable(table):
     if table == None:
@@ -529,7 +573,20 @@ def printTable(table):
 #scrapeFixtures(2018,const.LA_LIGA)
 #scrapeFixtures(2018,const.PREMIER_LEAGUE)
 
-printTable(getTable(const.PREMIER_LEAGUE,2018,None,const.TOPTEAMS[const.PREMIER_LEAGUE]))
+# PL full table 
+#printTable(getTable(const.PREMIER_LEAGUE,2018))
 
-#printTable(getTable(const.PREMIER_LEAGUE,2018,None,const.TABLE_TOPTEAMS))
+# PL BIG 6 Pre & Post New Year
+#printTable(getTable(const.PREMIER_LEAGUE,2018,None,const.TOPTEAMS[const.PREMIER_LEAGUE],None,"2018-12-31"))
+#printTable(getTable(const.PREMIER_LEAGUE,2018,None,const.TOPTEAMS[const.PREMIER_LEAGUE],"2019-1-1"))
+
+# PL table from Start of season until end of 2018
+#printTable(getTable(const.PREMIER_LEAGUE,2018,None,[],None,"2018-12-31"))
+
+# PL table from start of 2019 to now
+#printTable(getTable(const.PREMIER_LEAGUE,2018,None,[],"2019-1-1"))
+
+#printTable(getTable(const.PREMIER_LEAGUE,2018,None,[],None, "2018-11-20"))
+
+
 #getFixtures(2018,"Liverpool",True)
