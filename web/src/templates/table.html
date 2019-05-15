@@ -2,6 +2,32 @@
 
 {% block title %}Table {% endblock%}
 
+{% block javascript %}
+
+<script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+<script type="text/javascript">
+  google.charts.load('current', {'packages':['corechart']});
+  google.charts.setOnLoadCallback(drawChart);
+
+  function drawChart() {
+    var data = google.visualization.arrayToDataTable({{ dataArray|safe }});
+
+    var options = {
+      title: 'League Position',
+      curveType: 'function',
+      legend: { position: 'bottom' },
+      vAxis: { direction: -1, ticks: [1,5,10,15,20] }
+    };
+
+    var chart = new google.visualization.LineChart(document.getElementById('curve_chart'));
+
+    chart.draw(data, options);
+  }
+</script>
+
+{% endblock %}
+
+
 {% block content%}
 
         <div>
@@ -11,6 +37,7 @@
         <div>
             <table>
                 <tr>
+                    <td></td>
                     <td class="table_team"></td>
                     <td>P</td>
                     <td>W</td>
@@ -25,6 +52,7 @@
 
             {% for row in data %}
                 <tr>
+                    <td>{{ row[1]["position"] }}</td>
                     <td><img class="table_logo" src="/static/images/logos/{{league}}/{{row[0]}}.png">
                         {{ row[1]["teamname"] }}</td>
                     
@@ -50,5 +78,7 @@
 
             </table>
         </div>
+
+        <div id="curve_chart" style="width: 900px; height: 500px"></div>
 
 {% endblock%}

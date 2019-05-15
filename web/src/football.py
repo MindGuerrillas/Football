@@ -8,6 +8,7 @@ from dateutil.parser import parse
 import hashlib
 import datetime
 import time
+from datetime import timedelta
 import constant as const
 import unicodedata
 import utilities as utils
@@ -260,6 +261,27 @@ def getNearestGameDate(query, targetDate, beforeOrAfter):
 
     return targetDate
 
+# Get start and end date of season so far
+def getSeasonDates(query):
+    
+    seasonDates = { "startDate": None, "endDate": None}
+
+    db = getDatabase()
+    
+    # get first game
+    game = db.results.find(query, {"date": 1}).sort("date", const.SORT_ORDER_ASC).limit(1)
+    
+    for result in game:
+        seasonDates["startDate"] = result["date"]
+
+    # get last game
+    game = db.results.find(query, {"date": 1}).sort("date", const.SORT_ORDER_DESC).limit(1)
+    
+    for result in game:
+        seasonDates["endDate"] = result["date"]
+
+    return seasonDates
+
 def __buildTable(league=const.PREMIER_LEAGUE, season=currentSeason(), fromDate=None, untilDate=None, teamFilter=[]):
 
     # Analyse results for season & generate a league table
@@ -277,6 +299,7 @@ def __buildTable(league=const.PREMIER_LEAGUE, season=currentSeason(), fromDate=N
     #   "liverpool": # This is the __teamnameSlug e.g. west-ham-united
     #   {
     #       "teamname": Liverpool,
+    #       "position": Only set after sorting in getTable
     #       "home": {
     #               "played": 0
     #               "won": 0,
@@ -530,6 +553,7 @@ def getTable(league=const.PREMIER_LEAGUE, season=currentSeason(),
 
     utils.debuggingPrint("Search for Table _id: " + _id)
 
+    # 3. Find Table
     try:        
         utils.debuggingPrint("Running Table Query: " + str(tableQuery))
         
@@ -555,9 +579,17 @@ def getTable(league=const.PREMIER_LEAGUE, season=currentSeason(),
     table = sorted(table,key=lambda x: x[1][scope]["gd"], reverse=True)
     table = sorted(table,key=lambda x: x[1][scope]["points"], reverse=True)
 
+    # Set Position for each team in current sorted state
+    position = 1
+
+    for team in table:
+        team[1]["position"] = position
+        position += 1
+
     return table
 
 
+# Returns a team's form on a given date
 def getTeamFormByDate(league, teamslug, atDate=datetime.datetime.now()):
 
     # Generate a table for the date
@@ -583,6 +615,154 @@ def printTable(table):
                 " " + str(x[1]["totals"]["form"]))
 
 
+def buildPositionsGraph(league, season, teamFilter=[]):
+
+    # 1. Build array in form    [
+    #                               ['Week', 'liverpool', 'chelsea'.... ]
+    #                               [   1       1           3           ]
+    #                               [   2       1           4           ]
+    #                           ]
+    # listing position of teams after 1 week intervals from the first weekend
+
+    # Get start and end date for season
+    resultsQuery = {}
+    resultsQuery["league"] = league
+    resultsQuery["season"] = season
+    
+    seasonDates = getSeasonDates(resultsQuery)
+
+    # 2. Get a table for each week from startdate
+    currentWeek = seasonDates["startDate"] + timedelta(days=3) ## Add days until end of weekend   
+
+    dataArray = []
+    headerArray = []
+
+    while currentWeek <= seasonDates["endDate"] + timedelta(days=3):
+
+        standings = getTable(league, season, None, [], None, currentWeek)
+        
+        # sort by name to ensure array consistancy
+        standings = sorted(standings,key=lambda x: x[0])
+
+        # build header array of team names on 1st pass
+        if not headerArray:
+            headerArray.append("Week")
+
+            for team in standings:
+                if teamFilter:
+                    if team[0] in teamFilter:
+                        headerArray.append(team[0])
+                else:
+                    headerArray.append(team[0])
+
+            dataArray.append(headerArray)
+
+        # Add details to array
+        weeklyData = []
+        
+        weeklyData.append(currentWeek.strftime("%d %b"))
+
+        for team in standings:
+            if teamFilter:
+                if team[0] in teamFilter:            
+                    weeklyData.append(team[1]["position"])
+            else:
+                weeklyData.append(team[1]["position"])
+
+        dataArray.append(weeklyData)
+
+        currentWeek = currentWeek + timedelta(days=7)
+
+    return dataArray
+
+# Returns a team's form on a given date
+def getTeamFormByDate(league, teamslug, atDate=datetime.datetime.now()):
+
+    # Generate a table for the date
+    table = getTable(league, season=whichSeason(None,None,atDate), 
+            scope=None, teamFilter=[], 
+            fromDate = None,
+            untilDate=atDate)
+    
+    # Find the team and return the form
+    for team in table:
+        if team[0] == teamslug:
+            return team[1]["totals"]["form"]
+
+    return []
+
+
+def printTable(table):
+    if table == None:
+        return ""
+        
+    for x in table:
+        print (x[1]["teamname"] + " " + str(x[1]["totals"]["gd"]) + " " + str(x[1]["totals"]["points"]) + \
+                " " + str(x[1]["totals"]["form"]))
+
+
+def buildPointsGraph(league, season, teamFilter=[]):
+
+    # 1. Build array in form    [
+    #                               ['Week', 'liverpool', 'chelsea'.... ]
+    #                               [   1       3           3           ]
+    #                               [   2       6           4           ]
+    #                           ]
+    # listing position of teams after 1 week intervals from the first weekend
+
+    # Get start and end date for season
+    resultsQuery = {}
+    resultsQuery["league"] = league
+    resultsQuery["season"] = season
+    
+    seasonDates = getSeasonDates(resultsQuery)
+
+    # 2. Get a table for each week from startdate
+    currentWeek = seasonDates["startDate"] + timedelta(days=3) ## Add days until end of weekend   
+
+    dataArray = []
+    headerArray = []
+
+    while currentWeek <= seasonDates["endDate"] + timedelta(days=3):
+
+        standings = getTable(league, season, None, [], None, currentWeek)
+        
+        # sort by name to ensure array consistancy
+        standings = sorted(standings,key=lambda x: x[0])
+
+        # build header array of team names on 1st pass
+        if not headerArray:
+            headerArray.append("Week")
+
+            for team in standings:
+                if teamFilter:
+                    if team[0] in teamFilter:
+                        headerArray.append(team[0])
+                else:
+                    headerArray.append(team[0])
+
+            dataArray.append(headerArray)
+
+        # Add details to array
+        weeklyData = []
+        
+        weeklyData.append(currentWeek.strftime("%d %b"))
+
+        for team in standings:
+            if teamFilter:
+                if team[0] in teamFilter:            
+                    weeklyData.append(team[1]["totals"]["points"])
+            else:
+                weeklyData.append(team[1]["totals"]["points"])
+
+        dataArray.append(weeklyData)
+
+        currentWeek = currentWeek + timedelta(days=7)
+
+    return dataArray
+
+print (buildPositionsGraph("premier-league",2018))
+
 #scrapeFixtures(2018,const.LA_LIGA)
 #scrapeFixtures(2018,const.PREMIER_LEAGUE)
 
@@ -604,4 +784,3 @@ def printTable(table):
 
 #for game in getFixtures(const.PREMIER_LEAGUE, 2018, "Liverpool", const.TOPTEAMS[const.PREMIER_LEAGUE]):
 #    print (game["home"]["team"] + " vs " + game["away"]["team"] + "  -  " + str(game["date"]))
-

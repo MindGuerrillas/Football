@@ -69,10 +69,18 @@ def tables(league=const.PREMIER_LEAGUE, season=None, scope="totals",
         fromdate = str(fromseason) + "-" + str(frommonth) + "-" + str(fromday)
         season = fb.whichSeason(frommonth, fromseason)
 
+    if season == None:
+        season = fb.currentSeason()
+
     table = fb.getTable(league, season, scope, [], fromdate, untildate)
 
-    if table:
-        return render_template('table.html', data=table, scope=scope, league=league)
+    if table:        
+        dataArray = fb.buildPositionsGraph(league, season, const.TOPTEAMS[league])
+        dataArray = html.unescape(dataArray)
+        
+        dataArray = str(dataArray)
+
+        return render_template('table.html', data=table, scope=scope, league=league, dataArray=dataArray)
     else:
         # No table returned: Error
         return redirect(url_for("home"))
@@ -129,10 +137,11 @@ def bigsixform(league=const.PREMIER_LEAGUE, season=fb.currentSeason()):
 
             teamdata["data"].append(matchdata)
 
-            matchtotal += 1
-            formtotal = formtotal + formscore
+            if len(form) >= 4: # only count the form towards average if more than 4 games played
+                matchtotal += 1
+                formtotal = formtotal + formscore
 
-        teamdata["formaverage"] = formtotal / matchtotal
+        teamdata["formaverage"] = round(formtotal / matchtotal,2)
 
         data.append(teamdata)
 
