@@ -5,7 +5,7 @@ MONGODB_SERVER      =   "mongo"
 MONGODB_USER        =   "root"
 MONGODB_PASSWORD    =   "example"
 
-VERBOSE             =   True
+VERBOSE             =   False
 
 # dateslug "/2019-04"
 BASE_URL = "https://www.bbc.co.uk/sport/football/LEAGUETAG/scores-fixtures/"

@@ -5,6 +5,8 @@ from flask import render_template
 import football as fb
 from football import const
 import html
+import datetime
+from datetime import timedelta
 
 app = Flask(__name__)
 
@@ -24,7 +26,7 @@ def home():
 @app.route("/<league>/results/<int:season>/<int:month>/<team>/")
 def results(league, season=None, team=None, month=None):
 
-    fixtures = fb.getFixtures(league, season, team, month)
+    fixtures = fb.getFixtures(league, season, team, [], month)
     
     output = ""
 
@@ -41,17 +43,13 @@ def results(league, season=None, team=None, month=None):
 @app.route("/<league>/table/")
 @app.route("/<league>/table/<int:season>/")
 @app.route("/<league>/table/<int:season>/<string:scope>/")
-
 @app.route("/<league>/table/until/<int:untilseason>/<int:untilmonth>/<int:untilday>/")
 @app.route("/<league>/table/until/<int:untilseason>/<int:untilmonth>/<int:untilday>/<scope>/")
-
 @app.route("/<league>/table/from/<int:fromseason>/<int:frommonth>/<int:fromday>/")
 @app.route("/<league>/table/from/<int:fromseason>/<int:frommonth>/<int:fromday>/<scope>/")
-
 @app.route("/<league>/table/from/<int:fromseason>/<int:frommonth>/<int:fromday>/until/<int:untilseason>/<int:untilmonth>/<int:untilday>/")
 @app.route("/<league>/table/from/<int:fromseason>/<int:frommonth>/<int:fromday>/until/<int:untilseason>/<int:untilmonth>/<int:untilday>/<scope>/")
-
-def tables(league=None, season=None, scope="totals", 
+def tables(league=const.PREMIER_LEAGUE, season=None, scope="totals", 
             fromseason=None, frommonth=None, fromday=None,
             untilseason=None, untilmonth=None, untilday=None
             ):
@@ -78,6 +76,67 @@ def tables(league=None, season=None, scope="totals",
     else:
         # No table returned: Error
         return redirect(url_for("home"))
+
+
+@app.route("/bigsixform/")
+def bigsixform(league=const.PREMIER_LEAGUE, season=fb.currentSeason()):
+
+    teamFilter = const.TOPTEAMS[league]
+
+    data = []
+
+    for team in teamFilter:
+
+        teamdata = {}
+
+        teamdata["teamname"] = team
+        teamdata["data"] = []
+
+        teamdata["formaverage"] = 0
+
+        formtotal = 0
+        matchtotal = 0
+
+        # Get team's games against other TOPTEAMS.
+        for game in fb.getFixtures(league, season, team, teamFilter):
+
+            # 1. for each game get the opponents form upto the game date - 1            
+            form = []
+            gameDate = game["date"] - timedelta(days=1) ## MINUS ONE DAY
+
+            if game["home"]["teamslug"] == team: # Home Game
+                form = fb.getTeamFormByDate("premier-league",game["away"]["teamslug"],gameDate)
+            else:
+                form = fb.getTeamFormByDate("premier-league",game["home"]["teamslug"],gameDate)
+            
+            matchdata = {}
+
+            # Format Game.date to 27 Jan
+            game["date"] = game["date"].strftime("%d %b")
+
+            matchdata["game"] = game
+            matchdata["form"] = form
+
+            formscore = 0
+
+            for f in form:
+                if f == "W":
+                    formscore = formscore + 3
+                elif f == "D":
+                    formscore += 1
+
+            matchdata["formscore"] = formscore
+
+            teamdata["data"].append(matchdata)
+
+            matchtotal += 1
+            formtotal = formtotal + formscore
+
+        teamdata["formaverage"] = formtotal / matchtotal
+
+        data.append(teamdata)
+
+    return render_template("bigsixform.html", data=data, league=league)
 
 
 if __name__ == "__main__":

@@ -7,6 +7,7 @@ from pymongo import MongoClient
 from dateutil.parser import parse
 import hashlib
 import datetime
+import time
 import constant as const
 import unicodedata
 import utilities as utils
@@ -76,7 +77,7 @@ def __teamnameSlug(team):
     return strip_accents(team).lower().replace(" ", "-")
 
 def __teamnameSlugReverse(teamslug):
-    return teamslug.capitalize().replace("-", " ")
+    return teamslug.title().replace("-", " ")
 
 
 # __scrapeMonthlyFixtures() returns a list of dictionary objects.
@@ -207,10 +208,8 @@ def scrapeFixtures(currentyear=currentSeason(), league=const.PREMIER_LEAGUE,
     else:
         print("Results saved")
 
-    closeDatabase()
 
-
-def getFixtures(league=const.PREMIER_LEAGUE, season=currentSeason(), club=None, month=None):
+def getFixtures(league=const.PREMIER_LEAGUE, season=currentSeason(), club=None, teamFilter = [], month=None):
     
     # Sanity check
     if season == None:
@@ -220,20 +219,25 @@ def getFixtures(league=const.PREMIER_LEAGUE, season=currentSeason(), club=None, 
 
     db = getDatabase()
  
-    query = {}
-    query["season"] = season
-    query["league"] = league
+    resultsQuery = {}
+    resultsQuery["season"] = season
+    resultsQuery["league"] = league
 
     if month:
-        query["$expr"] = { "$eq": [{ "$month": "$date" }, month] }
+        resultsQuery["$expr"] = { "$eq": [{ "$month": "$date" }, month] }
 
     if club:
         club = __teamnameSlug(club)
-        query["$or"] = [{"home.teamslug": club}, {"away.teamslug": club}]
+        resultsQuery["$or"] = [{"home.teamslug": club}, {"away.teamslug": club}]
 
-    fixtures = db.results.find(query).sort([("date", 1), ("home.team", 1)])
+    #resultsQuery["date"] = {"$gte": fromDate,"$lte":untilDate}
+    
+    if teamFilter != []:
+        resultsQuery["home.teamslug"] = { "$in": teamFilter}
+        resultsQuery["away.teamslug"] = { "$in": teamFilter}
 
-    closeDatabase()
+    utils.debuggingPrint("Running Results Query: " + str(resultsQuery))
+    fixtures = db.results.find(resultsQuery).sort([("date", 1), ("home.team", 1)])
 
     return list(fixtures)
 
@@ -249,7 +253,7 @@ def getNearestGameDate(query, targetDate, beforeOrAfter):
     elif beforeOrAfter == const.SORT_ORDER_DESC:
         query["date"] = {"$lte":targetDate}
 
-    game = db.results.find(query).sort("date", beforeOrAfter).limit(1)
+    game = db.results.find(query, {"date": 1}).sort("date", beforeOrAfter).limit(1)
     
     for result in game:
         return result["date"]
@@ -259,17 +263,18 @@ def getNearestGameDate(query, targetDate, beforeOrAfter):
 def __buildTable(league=const.PREMIER_LEAGUE, season=currentSeason(), fromDate=None, untilDate=None, teamFilter=[]):
 
     # Analyse results for season & generate a league table
+    
     # Table format
-
-    # _id: hash of league + type + table date
-    # fromdate: date the table starts at
-    # untildate: date table goes up to i.e. date of last fixture
-    # created: datetime that table was generated
-    # season: season id tag e.g. 2018
-    # league: premier-league
-    # filter: [] - list of teamslugs to filter by 
-    # standings {  - a dictionary containing 1 dictionary per team
-    #   "liverpool":     # This is the __teamnameSlug e.g. west-ham-united
+    #
+    # _id:          SHA1 hash of league + teamFilter + untilDate and fromDate
+    # fromdate:     date the table starts at i.e. date of first fixture
+    # untildate:    date table goes up to i.e. date of last fixture
+    # created:      datetime that table was generated
+    # season:       season id tag e.g. 2018
+    # league:       league tag e.g. premier-league
+    # filter: []    list of teamslugs to filter by 
+    # standings {   a dictionary containing 1 dictionary per team
+    #   "liverpool": # This is the __teamnameSlug e.g. west-ham-united
     #   {
     #       "teamname": Liverpool,
     #       "home": {
@@ -455,8 +460,6 @@ def __buildTable(league=const.PREMIER_LEAGUE, season=currentSeason(), fromDate=N
     else:
         print("Table saved")
 
-    closeDatabase()
-
     return table
 
 # scope must be totals, home or away
@@ -516,9 +519,6 @@ def getTable(league=const.PREMIER_LEAGUE, season=currentSeason(),
     firstGameDate = getNearestGameDate(resultsQuery, fromDate, const.SORT_ORDER_ASC)
     lastGameDate = getNearestGameDate(resultsQuery, untilDate, const.SORT_ORDER_DESC)
 
-    #utils.debuggingPrint("Target Date Range: " + str(fromDate) + " to " + str(untilDate))    
-    #utils.debuggingPrint("Game Date Range: " + str(firstGameDate) + " to " + str(lastGameDate))  
-
     # 2. check if table exists for exact current parameters, match on _id hash
     
     # generate _id hash
@@ -555,10 +555,23 @@ def getTable(league=const.PREMIER_LEAGUE, season=currentSeason(),
     table = sorted(table,key=lambda x: x[1][scope]["gd"], reverse=True)
     table = sorted(table,key=lambda x: x[1][scope]["points"], reverse=True)
 
-    closeDatabase()
-
     return table
 
+
+def getTeamFormByDate(league, teamslug, atDate=datetime.datetime.now()):
+
+    # Generate a table for the date
+    table = getTable(league, season=whichSeason(None,None,atDate), 
+            scope=None, teamFilter=[], 
+            fromDate = None,
+            untilDate=atDate)
+    
+    # Find the team and return the form
+    for team in table:
+        if team[0] == teamslug:
+            return team[1]["totals"]["form"]
+
+    return []
 
 
 def printTable(table):
@@ -589,4 +602,6 @@ def printTable(table):
 #printTable(getTable(const.PREMIER_LEAGUE,2018,None,[],None, "2018-11-20"))
 
 
-#getFixtures(2018,"Liverpool",True)
+#for game in getFixtures(const.PREMIER_LEAGUE, 2018, "Liverpool", const.TOPTEAMS[const.PREMIER_LEAGUE]):
+#    print (game["home"]["team"] + " vs " + game["away"]["team"] + "  -  " + str(game["date"]))
+
