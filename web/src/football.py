@@ -352,7 +352,6 @@ def __buildTable(league=const.PREMIER_LEAGUE, season=currentSeason(), fromDate=N
     if dateFilter:
         resultsQuery["date"] = dateFilter
 
-
     if teamFilter != []:
         resultsQuery["home.teamslug"] = { "$in": teamFilter}
         resultsQuery["away.teamslug"] = { "$in": teamFilter}
@@ -360,6 +359,12 @@ def __buildTable(league=const.PREMIER_LEAGUE, season=currentSeason(), fromDate=N
     utils.debuggingPrint("Running Results Query: " + str(resultsQuery))
 
     fixtures = db.results.find(resultsQuery).sort([("date", 1), ("home.team", 1)])
+
+    lastFixtureDate = None
+    fixture_count = 0
+    
+    ############################################################
+    # Build an empty table containing all teams for specified season and league
 
     table = {}
     table["league"] = league
@@ -373,8 +378,26 @@ def __buildTable(league=const.PREMIER_LEAGUE, season=currentSeason(), fromDate=N
     table["standings"] = {}
 
     standings = {}
-    lastFixtureDate = None
-    fixture_count = 0
+
+    # Get Teams list
+    seasonQuery = { "season": season, "league": league}
+
+    seasonResults = db.seasons.find(seasonQuery).next()
+
+    for team in seasonResults["teams"]:
+        addTeam = True
+        if teamFilter:
+            if team["teamslug"] not in teamFilter:
+                addTeam = False
+        
+        if addTeam == True:
+            standings[team["teamslug"]] = {
+                        "teamname": team["teamname"],
+                        "home": {"played": 0,"won": 0,"drawn": 0,"lost": 0,"for": 0,"against": 0,"gd": 0,"points": 0,"form": deque([],5)},
+                        "away": {"played": 0,"won": 0,"drawn": 0,"lost": 0,"for": 0,"against": 0,"gd": 0,"points": 0,"form": deque([],5)},
+                        "totals": {"played": 0,"won": 0,"drawn": 0,"lost": 0,"for": 0,"against": 0,"gd": 0,"points": 0,"form": deque([],5)}
+                        }
+    ############################################################
 
     for fixture in fixtures:
 
@@ -385,17 +408,7 @@ def __buildTable(league=const.PREMIER_LEAGUE, season=currentSeason(), fromDate=N
                 lastFixtureDate = fixture["date"]
 
         home = fixture["home"]
-        away = fixture["away"]
-
-        # is team already in table? If not add it and set starting values
-        for team in [home, away]:
-            if team["teamslug"] not in standings:
-                standings[team["teamslug"]] = {
-                                    "teamname": team["team"],
-                                    "home": {"played": 0,"won": 0,"drawn": 0,"lost": 0,"for": 0,"against": 0,"gd": 0,"points": 0,"form": deque([],5)},
-                                    "away": {"played": 0,"won": 0,"drawn": 0,"lost": 0,"for": 0,"against": 0,"gd": 0,"points": 0,"form": deque([],5)},
-                                    "totals": {"played": 0,"won": 0,"drawn": 0,"lost": 0,"for": 0,"against": 0,"gd": 0,"points": 0,"form": deque([],5)}
-                                }
+        away = fixture["away"]            
         
         # Add goals to table
         # home team
@@ -624,29 +637,32 @@ def buildPositionsGraph(league, season, teamFilter=[]):
     #                           ]
     # listing position of teams after 1 week intervals from the first weekend
 
-    # Get start and end date for season
+    # Get dates of matches in season
     resultsQuery = {}
     resultsQuery["league"] = league
     resultsQuery["season"] = season
     
-    seasonDates = getSeasonDates(resultsQuery)
+    db = getDatabase()
 
-    # 2. Get a table for each week from startdate
-    currentWeek = seasonDates["startDate"] + timedelta(days=3) ## Add days until end of weekend   
+    matchDates = db.results.distinct("date", resultsQuery)
+    
+    matchDates.sort()
+
+    # 2. Get a table for each match day
 
     dataArray = []
     headerArray = []
 
-    while currentWeek <= seasonDates["endDate"] + timedelta(days=3):
+    for matchdate in matchDates:
 
-        standings = getTable(league, season, None, [], None, currentWeek)
+        standings = getTable(league, season, None, [], None, matchdate)
         
         # sort by name to ensure array consistancy
         standings = sorted(standings,key=lambda x: x[0])
 
         # build header array of team names on 1st pass
         if not headerArray:
-            headerArray.append("Week")
+            headerArray.append("Match Day")
 
             for team in standings:
                 if teamFilter:
@@ -660,7 +676,7 @@ def buildPositionsGraph(league, season, teamFilter=[]):
         # Add details to array
         weeklyData = []
         
-        weeklyData.append(currentWeek.strftime("%d %b"))
+        weeklyData.append(matchdate.strftime("%d %b"))
 
         for team in standings:
             if teamFilter:
@@ -671,35 +687,7 @@ def buildPositionsGraph(league, season, teamFilter=[]):
 
         dataArray.append(weeklyData)
 
-        currentWeek = currentWeek + timedelta(days=7)
-
     return dataArray
-
-# Returns a team's form on a given date
-def getTeamFormByDate(league, teamslug, atDate=datetime.datetime.now()):
-
-    # Generate a table for the date
-    table = getTable(league, season=whichSeason(None,None,atDate), 
-            scope=None, teamFilter=[], 
-            fromDate = None,
-            untilDate=atDate)
-    
-    # Find the team and return the form
-    for team in table:
-        if team[0] == teamslug:
-            return team[1]["totals"]["form"]
-
-    return []
-
-
-def printTable(table):
-    if table == None:
-        return ""
-        
-    for x in table:
-        print (x[1]["teamname"] + " " + str(x[1]["totals"]["gd"]) + " " + str(x[1]["totals"]["points"]) + \
-                " " + str(x[1]["totals"]["form"]))
-
 
 def buildPointsGraph(league, season, teamFilter=[]):
 
@@ -761,13 +749,77 @@ def buildPointsGraph(league, season, teamFilter=[]):
 
     return dataArray
 
-print (buildPositionsGraph("premier-league",2018))
+def buildLeagueTeamsList(league, season, teamList=[]):
+
+    try:
+        # Store teams as
+
+        # "league": "premier-league"
+        # "season": 2018
+        # "teams": [{ "teamname": "Manchester City", "teamslug": "manchester-city"}]
+
+        data = {}
+        idhash = league + str(season)
+
+        data["_id"] = hashlib.sha1(idhash.encode()).hexdigest()
+        data["league"] = league
+        data["season"] = season
+        data["teams"] = []
+
+        for team in teamList:
+            data["teams"].append({ "teamname": team, "teamslug": __teamnameSlug(team)})
+
+        # save results to database
+        db = getDatabase()
+        collection = db.seasons
+        collection.insert_one(data)
+        
+        print ("Teams Stored")
+
+    except:
+        return
+
+    return
+
+def getDistinctTeams(league, season):
+    db = getDatabase()
+    query = { "league": league, "season": season}
+
+    teams = db.results.distinct("home.team", query)
+    teams.sort()
+    print (teams)
+
+
+
+"""
+premier_teams_2018 = ['AFC Bournemouth', 'Arsenal', 'Brighton & Hove Albion', 'Burnley', 'Cardiff City', 
+                'Chelsea', 'Crystal Palace', 'Everton', 'Fulham', 'Huddersfield Town', 'Leicester City', 
+                'Liverpool', 'Manchester City', 'Manchester United', 'Newcastle United', 'Southampton', 
+                'Tottenham Hotspur', 'Watford', 'West Ham United', 'Wolverhampton Wanderers']
+
+la_liga_teams_2018 = ['Alavés', 'Athletic Bilbao', 'Atlético Madrid', 'Barcelona', 'Celta Vigo', 'Eibar', 
+                    'Espanyol', 'Getafe', 'Girona', 'Huesca', 'Leganés', 'Levante', 'Rayo Vallecano', 'Real Betis', 
+                    'Real Madrid', 'Real Sociedad', 'Real Valladolid', 'Sevilla', 'Valencia', 'Villarreal']
+"""
+
+#getDistinctTeams(const.LA_LIGA,2018)
+
+#buildLeagueTeamsList(const.LA_LIGA, 2018,la_liga_teams_2018)
+
+#print (buildPositionsGraph("premier-league",2018))
 
 #scrapeFixtures(2018,const.LA_LIGA)
 #scrapeFixtures(2018,const.PREMIER_LEAGUE)
 
+"""getTable(league=const.PREMIER_LEAGUE, season=currentSeason(), 
+            scope=None, teamFilter=[], 
+            fromDate = None,
+            untilDate=datetime.datetime.now()            
+            ):
+"""
+
 # PL full table 
-#printTable(getTable(const.PREMIER_LEAGUE,2018))
+#printTable(getTable(const.PREMIER_LEAGUE,2018,None,const.TOPTEAMS[const.PREMIER_LEAGUE]))
 
 # PL BIG 6 Pre & Post New Year
 #printTable(getTable(const.PREMIER_LEAGUE,2018,None,const.TOPTEAMS[const.PREMIER_LEAGUE],None,"2018-12-31"))

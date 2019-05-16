@@ -76,9 +76,6 @@ def tables(league=const.PREMIER_LEAGUE, season=None, scope="totals",
 
     if table:        
         dataArray = fb.buildPositionsGraph(league, season, const.TOPTEAMS[league])
-        dataArray = html.unescape(dataArray)
-        
-        dataArray = str(dataArray)
 
         return render_template('table.html', data=table, scope=scope, league=league, dataArray=dataArray)
     else:
