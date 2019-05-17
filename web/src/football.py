@@ -10,7 +10,6 @@ import datetime
 import time
 from datetime import timedelta
 import constant as const
-import unicodedata
 import utilities as utils
 from collections import deque
 
@@ -58,24 +57,12 @@ def whichSeason(month, year, fulldate=None):
 def currentSeason():
     return whichSeason(0,0,datetime.datetime.now())
 
-def strip_accents(text):
-
-    try:
-        text = unicode(text, 'utf-8')
-    except NameError: # unicode is a default on python 3 
-        pass
-
-    text = unicodedata.normalize('NFD', text)\
-           .encode('ascii', 'ignore')\
-           .decode("utf-8")
-
-    return str(text)
 
 def __teamnameSlug(team):
     # return lower case team name
     # replace spaces with - dash
 
-    return strip_accents(team).lower().replace(" ", "-")
+    return utils.strip_accents(team).lower().replace(" ", "-")
 
 def __teamnameSlugReverse(teamslug):
     return teamslug.title().replace("-", " ")
@@ -128,15 +115,11 @@ def __scrapeMonthlyFixtures(dateslugyear=None, dateslugmonth=None, league=const.
             #   "attendance": 52000,
             #
             #   "home": {
-            #       "team": "Liverpool",
-            #       "teamslug": "liverpool",
-            #       "score": 4,
+            #       "team": "Liverpool", "teamslug": "liverpool", "score": 4,
             #       "players": [{"player_name": "Sadio Mane"}]
             #   },
             #   "away": {
-            #       "team": "West Ham",
-            #       "teamslug": "west-ham-united",
-            #       "score": 0,
+            #       "team": "West Ham", "teamslug": "west-ham-united", "score": 0,
             #       "players": [{"player_name": "Mark Noble"}]
             #   }
             # }
@@ -288,55 +271,27 @@ def __buildTable(league=const.PREMIER_LEAGUE, season=currentSeason(), fromDate=N
     
     # Table format
     #
-    # _id:          SHA1 hash of league + teamFilter + untilDate and fromDate
-    # fromdate:     date the table starts at i.e. date of first fixture
-    # untildate:    date table goes up to i.e. date of last fixture
-    # created:      datetime that table was generated
-    # season:       season id tag e.g. 2018
-    # league:       league tag e.g. premier-league
-    # filter: []    list of teamslugs to filter by 
-    # standings {   a dictionary containing 1 dictionary per team
-    #   "liverpool": # This is the __teamnameSlug e.g. west-ham-united
-    #   {
-    #       "teamname": Liverpool,
-    #       "position": Only set after sorting in getTable
-    #       "home": {
-    #               "played": 0
-    #               "won": 0,
-    #               "drawn": 0,
-    #               "lost": 0,
-    #               "for": 0,
-    #               "against": 0,
-    #               "gd": 0,
-    #               "points": 0,
-    #               "form": []
-    #             },
-    #       "away": {
-    #               "played": 0
-    #               "won": 0,
-    #               "drawn": 0,
-    #               "lost": 0
-    #               "for": 0,
-    #               "against": 0,
-    #               "gd": 0,
-    #               "points": 0
-    #               "form": []
-    #             },
-    #       "totals": {
-    #               "played": 0
-    #               "won": 0,
-    #               "drawn": 0,
-    #               "lost": 0
-    #               "for": 0,
-    #               "against": 0,
-    #               "gd": 0,
-    #               "points": 0
-    #               "form": []
-    #             }
-    #   }
+    # _id:          - SHA1 hash of league + teamFilter + untilDate and fromDate
+    # fromdate:     - date the table starts at i.e. date of first fixture
+    # untildate:    - date table goes up to i.e. date of last fixture
+    # created:      - datetime that table was generated
+    # season:       - season id tag e.g. 2018
+    # league:       - league tag e.g. premier-league
+    # filter: []    - list of teamslugs to filter by 
+    # standings {   - a dictionary containing 1 dictionary per team
+    #   "liverpool": - This is the __teamnameSlug e.g. west-ham-united
+    #               {
+    #                   "teamname": Liverpool,
+    #                   "position": 1,  ## Only set after sorting in getTable
+    #                   "home": { "played": 0, "won": 0, "drawn": 0, "lost": 0, "for": 0, "against": 0,
+    #                              "gd": 0,"points": 0,"form": [] },
+    #                   "away": { "played": 0, "won": 0, "drawn": 0, "lost": 0, "for": 0, "against": 0,
+    #                              "gd": 0,"points": 0,"form": [] },
+    #                   "totals": { "played": 0, "won": 0, "drawn": 0, "lost": 0, "for": 0, "against": 0,
+    #                              "gd": 0,"points": 0,"form": [] }    
+    #               }
     # }
 
-    # Get all the results
     db = getDatabase()
 
     resultsQuery = {}
@@ -423,7 +378,7 @@ def __buildTable(league=const.PREMIER_LEAGUE, season=currentSeason(), fromDate=N
         # Who won? # Update Points and Form for each outcome
         if home["score"] > away["score"]: # Home Win
             standings[home["teamslug"]]["home"]["won"] += 1
-            standings[home["teamslug"]]["home"]["points"] += 3
+            standings[home["teamslug"]]["home"]["points"] += const.POINTS_WIN
             standings[away["teamslug"]]["away"]["lost"] += 1
             
             standings[home["teamslug"]]["home"]["form"].append("W")
@@ -433,7 +388,7 @@ def __buildTable(league=const.PREMIER_LEAGUE, season=currentSeason(), fromDate=N
 
         elif away["score"] > home["score"]: # Away Win
             standings[away["teamslug"]]["away"]["won"] += 1
-            standings[away["teamslug"]]["away"]["points"] += 3
+            standings[away["teamslug"]]["away"]["points"] += const.POINTS_WIN
             standings[home["teamslug"]]["home"]["lost"] += 1
 
             standings[home["teamslug"]]["home"]["form"].append("L")
@@ -443,9 +398,9 @@ def __buildTable(league=const.PREMIER_LEAGUE, season=currentSeason(), fromDate=N
                         
         else: # draw
             standings[home["teamslug"]]["home"]["drawn"] += 1
-            standings[home["teamslug"]]["home"]["points"] += 1
+            standings[home["teamslug"]]["home"]["points"] += const.POINTS_DRAW
             standings[away["teamslug"]]["away"]["drawn"] += 1
-            standings[away["teamslug"]]["away"]["points"] += 1
+            standings[away["teamslug"]]["away"]["points"] += const.POINTS_DRAW
 
             standings[home["teamslug"]]["home"]["form"].append("D")
             standings[away["teamslug"]]["away"]["form"].append("D")
@@ -556,18 +511,15 @@ def getTable(league=const.PREMIER_LEAGUE, season=currentSeason(),
     lastGameDate = getNearestGameDate(resultsQuery, untilDate, const.SORT_ORDER_DESC)
 
     # 2. check if table exists for exact current parameters, match on _id hash
-    
-    # generate _id hash
-    idhash = league + str(teamFilter) + str(lastGameDate) + str(firstGameDate)
-    _id = hashlib.sha1(idhash.encode()).hexdigest()
-
-    tableQuery = {}
-    tableQuery["_id"] = _id
-
-    utils.debuggingPrint("Search for Table _id: " + _id)
 
     # 3. Find Table
     try:        
+        # generate _id hash
+        idhash = league + str(teamFilter) + str(lastGameDate) + str(firstGameDate)
+        _id = hashlib.sha1(idhash.encode()).hexdigest()
+
+        tableQuery = {"_id": _id}
+
         utils.debuggingPrint("Running Table Query: " + str(tableQuery))
         
         # use .next() to get document rather than cursor
