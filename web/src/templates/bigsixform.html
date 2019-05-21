@@ -6,73 +6,74 @@
     <style>
         .teamname { font-size: 1.4em;padding-bottom: 0.5em}
         img.table_logo_mid {width: 50px; vertical-align:middle}
-        td.teamPadding {padding: 15px}
         #resultsTable td {padding: 3px}
+
+        /* Grid Styles */
+        .bigsixteams > ul {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            grid-gap: 1rem;
+        }
+        
+        .bigsixteams > ul > li {
+            list-style-type: none;
+        }
     </style>
 {% endblock %}
 
 {% block content%}
 
-    <table>
-        <tr>
+    <section class="bigsixteams" id="bigsixteams">
 
-    {% set ns = namespace(colCount = 0) %}
-    
-    {% for team in data %}
-    
-        {% if ns.colCount == 3 %}
-            </tr><tr>
-        {% endif %}
+        <ul>
+            {% for team in data %}
+
+                <li>
+                    <div class="teamname">
+                        <img class="table_logo_mid" src="/static/images/logos/{{league}}/{{team.teamname}}.png">
+                        {{ team.teamname.title().replace("-", " ")}}
+                    </div>
         
-        <td class="teamPadding">
-
-            <div class="teamname">
-                <img class="table_logo_mid" src="/static/images/logos/{{league}}/{{team.teamname}}.png">
-                {{ team.teamname.title().replace("-", " ")}}
-            </div>
-
-            <table id="resultsTable">
-                {% for fixture in team.data %}
-                    <tr>
-                        <td>{{ fixture.game.date }}</td>
-                        
-                        {% if fixture.game.home.teamslug == team.teamname %}
-                            <td>{{ fixture.game.away.team }}</td>
-                            <td>(H)</td>
-                        {%else%}
-                            <td>{{ fixture.game.home.team }}</td>
-                            <td>(A)</td>                
-                        {%endif%}
-
-                        <td>
-                            <div>
-                                {% for form in fixture.form %}
-                                    <div class="form {{ form }}"></div>
-                                {% endfor %}
+                    <table id="resultsTable">
+                        {% for fixture in team.data %}
+                            <tr>
+                                <td>{{ fixture.game.date }}</td>
                                 
-                                <div class="clearfloat"></div>
-                            </div>
-                        </td>
-
-                        <td> {{ fixture.formscore}} pts</td>
-                    </tr>
-                {% endfor%}
-
-                <tr>
-                    <td></td>
-                    <td></td>
-                    <td></td>
-                    <td>Average Form:</td>
-                    <td> {{ team.formaverage }} pts</td>
-                </tr>
-
-            </table>
-        </td>
-        {% set ns.colCount = ns.colCount + 1 %}    
+                                {% if fixture.game.home.teamslug == team.teamname %}
+                                    <td>{{ fixture.game.away.team }}</td>
+                                    <td>(H)</td>
+                                {%else%}
+                                    <td>{{ fixture.game.home.team }}</td>
+                                    <td>(A)</td>                
+                                {%endif%}
         
-    {% endfor %}
-
-        </tr>
-    </table>
+                                <td>
+                                    <div>
+                                        {% for form in fixture.form %}
+                                            <div class="form {{ form }}"></div>
+                                        {% endfor %}
+                                        
+                                        <div class="clearfloat"></div>
+                                    </div>
+                                </td>
+        
+                                <td> {{ fixture.formscore}} pts</td>
+                            </tr>
+                        {% endfor%}
+        
+                        <tr>
+                            <td></td>
+                            <td></td>
+                            <td></td>
+                            <td>Average Form:</td>
+                            <td> {{ team.formaverage }} pts</td>
+                        </tr>
+        
+                    </table>
+                    
+                </li>
+            {% endfor %}            
+        </ul>
+    </section>
 
 {% endblock %}
