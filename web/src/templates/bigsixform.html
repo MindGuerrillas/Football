@@ -4,6 +4,8 @@
 
 {% block stylesheets %}
     <style>
+        body { margin: 0px}
+
         .teamname { font-size: 1.4em;padding-bottom: 0.5em}
         img.table_logo_mid {width: 50px; vertical-align:middle}
         #resultsTable td {padding: 3px}
@@ -12,11 +14,15 @@
         .bigsixteams > ul {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-            grid-gap: 1rem;
+            grid-gap: 1rem;  
+            margin-left: 0px;
+            padding-inline-start: 10px
         }
         
         .bigsixteams > ul > li {
             list-style-type: none;
+            margin-left: 0px;
+            padding-left: 0px;            
         }
     </style>
 {% endblock %}
