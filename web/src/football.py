@@ -739,7 +739,7 @@ def getDistinctTeams(league, season):
 
     teams = db.results.distinct("home.team", query)
     teams.sort()
-    print (teams)
+    return teams
 
 
 
@@ -754,6 +754,11 @@ la_liga_teams_2018 = ['Alavés', 'Athletic Bilbao', 'Atlético Madrid', 'Barcelo
                     'Real Madrid', 'Real Sociedad', 'Real Valladolid', 'Sevilla', 'Valencia', 'Villarreal']
 """
 
+#scrapeFixtures(2019,const.PREMIER_LEAGUE,8,3)
+#buildLeagueTeamsList(const.PREMIER_LEAGUE, 2019,getDistinctTeams(const.PREMIER_LEAGUE,2019))
+
+
+
 #getDistinctTeams(const.LA_LIGA,2018)
 
 #buildLeagueTeamsList(const.LA_LIGA, 2018,la_liga_teams_2018)
@@ -761,7 +766,6 @@ la_liga_teams_2018 = ['Alavés', 'Athletic Bilbao', 'Atlético Madrid', 'Barcelo
 #print (buildPositionsGraph("premier-league",2018))
 
 #scrapeFixtures(2018,const.LA_LIGA)
-#scrapeFixtures(2018,const.PREMIER_LEAGUE)
 
 """getTable(league=const.PREMIER_LEAGUE, season=currentSeason(), 
             scope=None, teamFilter=[], 
