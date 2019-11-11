@@ -12,11 +12,8 @@ app = Flask(__name__)
 
 @app.route("/")
 def home():
-
-    output = html.escape("/results/<int:season>/<team>") + "<BR>" + \
-        html.escape("/table/<int:season>/<scope>")
-
-    return output
+    
+    return render_template('paths.html')
 
 
 @app.route("/<league>/results/")

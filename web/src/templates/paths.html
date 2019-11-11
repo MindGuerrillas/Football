@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block title %}Paths {% endblock%}
+
+{% block content%}
+
+    <h3>Results</h3>
+
+    {{  '@app.route("/<league>/results/") # defaults to current premier league ' | escape}} <BR>
+    {{  '@app.route("/<league>/results/<int:season>/")' | escape}} <BR>
+    {{  '@app.route("/<league>/results/<int:season>/<team>/")' | escape}} <BR>
+    {{  '@app.route("/<league>/results/<int:season>/<int:month>/")' | escape}} <BR>
+    {{  '@app.route("/<league>/results/<int:season>/<int:month>/<team>/")' | escape}} <BR>
+
+    <h3>Tables</h3>
+
+    {{  '@app.route("/tables/")  # defaults to current premier league ' | escape}} <BR>
+    {{  '@app.route("/<league>/table/")' | escape}} <BR>
+    {{  '@app.route("/<league>/table/<int:season>/")' | escape}} <BR>
+    {{  '@app.route("/<league>/table/<int:season>/<string:scope>/")' | escape}} <BR>
+    {{  '@app.route("/<league>/table/until/<int:untilseason>/<int:untilmonth>/<int:untilday>/")' | escape}} <BR>
+    {{  '@app.route("/<league>/table/until/<int:untilseason>/<int:untilmonth>/<int:untilday>/<scope>/")' | escape}} <BR>
+    {{  '@app.route("/<league>/table/from/<int:fromseason>/<int:frommonth>/<int:fromday>/")' | escape}} <BR>
+    {{  '@app.route("/<league>/table/from/<int:fromseason>/<int:frommonth>/<int:fromday>/<scope>/")' | escape}} <BR>
+    {{  '@app.route("/<league>/table/from/<int:fromseason>/<int:frommonth>/<int:fromday>/until/<int:untilseason>/<int:untilmonth>/<int:untilday>/")' | escape}} <BR>
+    {{  '@app.route("/<league>/table/from/<int:fromseason>/<int:frommonth>/<int:fromday>/until/<int:untilseason>/<int:untilmonth>/<int:untilday>/<scope>/")' | escape}} <BR>
+
+    <h3>Big 6 Form</h3>
+
+    {{  '@app.route("/bigsixform/")' | escape}} <BR>
+
+{% endblock %}
