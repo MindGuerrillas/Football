@@ -754,7 +754,7 @@ la_liga_teams_2018 = ['Alavés', 'Athletic Bilbao', 'Atlético Madrid', 'Barcelo
                     'Real Madrid', 'Real Sociedad', 'Real Valladolid', 'Sevilla', 'Valencia', 'Villarreal']
 """
 
-#scrapeFixtures(2019,const.PREMIER_LEAGUE,8,3)
+scrapeFixtures(2019,const.PREMIER_LEAGUE,8,4)
 #buildLeagueTeamsList(const.PREMIER_LEAGUE, 2019,getDistinctTeams(const.PREMIER_LEAGUE,2019))
 
 
