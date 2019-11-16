@@ -1,15 +1,23 @@
-<!doctype html>
-<html>
-<head>
-    <title>Results</title>
-</head>
+{% extends "base.html" %}
 
-<body>
+{% block title %}Table {% endblock%}
 
-{% for fixture in data %}
-   {{ fixture.home.team }} {{ fixture.home.score }}-{{ fixture.away.score }} {{ fixture.away.team }}
-   <BR>
-{% endfor %}
+{% block content%}
 
-</body>
-</html>
+    <div>
+        <img src="/static/images/logos/{{data["league"]}}/{{data["league"]}}.png" width="100px"/>
+    </div>
+    <BR>
+        
+    {% for fixture in data["fixtures"] %}
+    
+    <div>
+        <div class="floatleft"><img class="table_logo" src="/static/images/logos/{{data["league"]}}/{{fixture.home.teamslug}}.png"></div>
+        <div class="floatleft result">{{ fixture.home.team }} {{ fixture.home.score }}-{{ fixture.away.score }} {{ fixture.away.team }}</div>
+        <div class="floatleft"><img class="table_logo" src="/static/images/logos/{{data["league"]}}/{{fixture.away.teamslug}}.png"></div>   
+    </div>      
+    <div class="clearfloat"></div>     
+
+    {% endfor %}
+
+{% endblock%}

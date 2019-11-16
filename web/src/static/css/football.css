@@ -1,4 +1,5 @@
 .clearfloat {clear: both}
+.floatleft {float: left}
 
 body {font-size: 0.8em; font-family: calibre-light,arial,"sans serif";}
 
@@ -10,3 +11,4 @@ img.table_logo {width: 20px; vertical-align:middle}
 .W {background-color: green;}
 .D {background-color: gray;}
 .L {background-color: red;}     
+.result {margin: 5px;}

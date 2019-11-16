@@ -25,15 +25,13 @@ def results(league, season=None, team=None, month=None):
 
     fixtures = fb.getFixtures(league, season, team, [], month)
     
-    output = ""
-
-    for fixture in fixtures:
-        home = fixture["home"]
-        away = fixture["away"]
-        output += home["team"] + " " + str(home["score"]) + \
-            "-" + str(away["score"]) + " " + away["team"] + "<BR>"
-
-    return render_template('results.html', data=fixtures)
+    data = {}
+    data["fixtures"] = fixtures
+    data["league"] = league
+    data["season"] = season
+    data["team"] = team
+    
+    return render_template('results.html', data=data)
 
 
 @app.route("/tables/")  # defaults to current premier league
