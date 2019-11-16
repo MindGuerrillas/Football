@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
 # Database
-MONGODB_SERVER      =   "mongo"
-MONGODB_USER        =   "root"
+MONGODB_SERVER      =   "192.168.0.2"  #mongo
+MONGODB_USER        =   "football" #root
 MONGODB_PASSWORD    =   "example"
 
 VERBOSE             =   True

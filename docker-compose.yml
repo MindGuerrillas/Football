@@ -12,16 +12,16 @@ services:
     volumes:
       - ./web/src:/app
       
-  mongo:
-    image: mongo
-    restart: always
-    ports:
-      - 27017:27017
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: example
-    volumes:
-      - ./data:/data/db:rw
+  #mongo:
+  #  image: mongo
+  #  restart: always
+  #  ports:
+  #    - 27017:27017
+  #  environment:
+  #    MONGO_INITDB_ROOT_USERNAME: root
+  #    MONGO_INITDB_ROOT_PASSWORD: example
+  #  volumes:
+  #    - ./data:/data/db:rw
 
   mongo-express:
     image: mongo-express
@@ -31,4 +31,4 @@ services:
     environment:
       ME_CONFIG_MONGODB_ADMINUSERNAME: root
       ME_CONFIG_MONGODB_ADMINPASSWORD: example
-
+      ME_CONFIG_MONGODB_SERVER: 192.168.0.2
